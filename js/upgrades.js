@@ -83,7 +83,7 @@ export const UPGRADES = [
     glyph: '◎',
     max: 5,
     apply(stats) {
-      stats.magnet += 48;
+      stats.magnet += 90;
     },
   },
   {

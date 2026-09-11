@@ -151,6 +151,7 @@ export class World {
       vy: 0,
       value: 1,
       r: CONFIG.xp.gemRadius,
+      age: 0,
     }));
 
     this.particles = makePool(CONFIG.maxParticles, () => ({
@@ -341,16 +342,22 @@ export class World {
   _nearestEnemy(range) {
     const p = this.stats;
     const r2 = range * range;
+    let boss = null;
     let best = null;
     let bestD = r2;
     for (let i = 0; i < this.enemies.length; i += 1) {
       const e = this.enemies[i];
       if (!e.alive) continue;
       const d = dist2(p.x, p.y, e.x, e.y);
+      if (e.kind === 'boss') boss = e;
       if (d < bestD) {
         bestD = d;
         best = e;
       }
+    }
+    // ボス戦は雑魚より本体を優先して撃つ
+    if (boss && dist2(p.x, p.y, boss.x, boss.y) < range * range * 2.2) {
+      return boss;
     }
     return best;
   }
@@ -863,6 +870,7 @@ export class World {
     g.vy = this.rng.range(-40, 40);
     g.value = value;
     g.r = CONFIG.xp.gemRadius;
+    g.age = 0;
   }
 
   /**
@@ -870,24 +878,28 @@ export class World {
    */
   _updateGems(dt) {
     const p = this.stats;
-    const mag2 = p.magnet * p.magnet;
-    const pick2 = 16 * 16;
+    const pick2 = 30 * 30;
+    const viewR = Math.hypot(this._viewW, this._viewH) * 0.55;
     for (let i = 0; i < this.gems.length; i += 1) {
       const g = this.gems[i];
       if (!g.alive) continue;
+      g.age += dt;
       const d2 = dist2(g.x, g.y, p.x, p.y);
-      if (d2 < mag2) {
+      const dist = Math.sqrt(d2);
+      // 画面内は常に吸引。少し経ったジェムは画面外からも回収する
+      const vacuum = dist < Math.max(p.magnet, viewR) || g.age >= CONFIG.xp.vacuumAge;
+      if (vacuum && dist > 0.001) {
         const n = norm(p.x - g.x, p.y - g.y);
-        const pull = CONFIG.xp.gemSpeed * (1.1 - Math.sqrt(d2) / p.magnet);
+        const pull = CONFIG.xp.gemSpeed * (0.7 + Math.min(1.4, dist / 160));
         g.vx = n.x * pull;
         g.vy = n.y * pull;
       } else {
-        g.vx *= 0.92;
-        g.vy *= 0.92;
+        g.vx *= 0.9;
+        g.vy *= 0.9;
       }
       g.x += g.vx * dt;
       g.y += g.vy * dt;
-      if (d2 < pick2) {
+      if (dist2(g.x, g.y, p.x, p.y) < pick2) {
         g.alive = false;
         this._addXp(g.value);
         this.emit('gem');

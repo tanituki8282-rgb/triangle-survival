@@ -100,6 +100,16 @@ w2._firePlayer(0);
 const shots = w2.pBullets.filter((b) => b.alive).length;
 assert('spread fires 3', shots === 3);
 
+const vac = new World(5);
+vac.setView(1280, 720);
+vac.spawnEnemy('grunt', 220, 40);
+const farGrunt = vac.enemies.find((e) => e.alive);
+vac._killEnemy(farGrunt);
+for (let i = 0; i < 90; i += 1) {
+  vac.update(1 / 60, { x: 0, y: 0 });
+}
+assert('vacuum collects distant gem xp', vac.xp > 0 || vac.level > 1 || vac.pendingLevels > 0);
+
 const smoke = new World(99);
 smoke.setView(1280, 720);
 let threw = false;

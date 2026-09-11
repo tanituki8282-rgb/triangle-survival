@@ -285,13 +285,18 @@ export class Renderer {
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = '#ffe566';
     ctx.shadowColor = '#ffe566';
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 10;
     for (let i = 0; i < world.pBullets.length; i += 1) {
       const b = world.pBullets[i];
       if (!b.alive) continue;
+      const ang = Math.atan2(b.vy, b.vx);
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(ang);
       ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r + 0.6, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, b.r * 2.4, b.r * 0.85, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -325,9 +330,9 @@ export class Renderer {
   _gems(ctx, world) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = '#b8f25a';
-    ctx.shadowColor = '#b8f25a';
-    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#5dff7a';
+    ctx.shadowColor = '#5dff7a';
+    ctx.shadowBlur = 12;
     for (let i = 0; i < world.gems.length; i += 1) {
       const g = world.gems[i];
       if (!g.alive) continue;
@@ -399,9 +404,9 @@ export class Renderer {
    */
   _minimapHint(ctx, world, fps) {
     ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
-    ctx.fillStyle = 'rgba(200,220,255,0.45)';
+    ctx.fillStyle = 'rgba(220,235,255,0.75)';
     ctx.textAlign = 'right';
-    ctx.fillText(`${fps | 0} FPS`, this.w - 16, this.h - 16);
+    ctx.fillText(`${fps | 0} FPS`, this.w - 16, this.h - 42);
     if (world.combo >= 4) {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffe566';
