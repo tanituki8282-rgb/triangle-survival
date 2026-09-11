@@ -2,7 +2,7 @@
  * Node から呼べる純粋ロジックの回帰テスト。
  */
 import { circlesOverlap, dist2, RNG, SpatialHash, xpToNext } from '../js/math.js';
-import { applyUpgrade, rollChoices, UPGRADES } from '../js/upgrades.js';
+import { applyUpgrade, describeUpgrade, rollChoices, UPGRADES } from '../js/upgrades.js';
 import { CONFIG } from '../js/config.js';
 import { World } from '../js/world.js';
 
@@ -134,6 +134,69 @@ for (let i = 0; i < 108 * 60; i += 1) {
 }
 assert('boss spawned near 105s', late.bossSpawned);
 assert('warning fired', late.bossWarningPlayed);
+
+const rapid = UPGRADES.find((u) => u.id === 'rapid');
+const info = describeUpgrade(rapid, {
+  fireInterval: 0.2,
+  bulletDamage: 10,
+  projectileCount: 1,
+  pierce: 0,
+  speed: 255,
+  maxHp: 120,
+  hp: 120,
+  magnet: 280,
+  orbitCount: 0,
+  novaLevel: 0,
+  lifesteal: 0,
+  bulletSpeed: 560,
+  bulletLife: 0.85,
+  regen: 0.7,
+}, {});
+assert('card shows rank 0 to 1', info.rank === 0 && info.nextRank === 1);
+assert('rapid delta has seconds', info.deltaText.includes('0.20s') && info.deltaText.includes('→'));
+
+let spotlight = 0;
+for (let i = 0; i < 40; i += 1) {
+  const c = rollChoices({}, new RNG(1000 + i), 3, 2);
+  if (c.some((u) => u.id === 'orbit' || u.id === 'nova')) spotlight += 1;
+}
+assert('early rolls often include orbit or nova', spotlight >= 22);
+
+const arena = new World(8);
+arena.setView(1280, 720);
+arena._spawnEBullet(10, 0, 0, 40, 4, '#ff4a2a', 9);
+assert('pre-boss bullets exist', arena.eBullets.some((b) => b.alive));
+arena._spawnBoss();
+assert('boss spawn clears bullets', !arena.eBullets.some((b) => b.alive));
+assert('boss grace window', arena.bossGrace >= 2);
+assert('iframe on boss spawn', arena.stats.iFrame > 0);
+
+const fl = new World(3);
+fl.setView(800, 600);
+const g = fl.spawnEnemy('grunt', 40, 0);
+fl._damageEnemy(g, 1, 0, 0);
+assert('hit flinch', g.alive && g.flinch > 0);
+
+const after = new World(4);
+after.setView(1280, 720);
+const boss = after.spawnEnemy('boss', 80, 0);
+after._killEnemy(boss);
+assert('boss kill delays result', after.victory && !after.over && after.aftermath > 0);
+for (let i = 0; i < 160; i += 1) after.update(1 / 60, { x: 0, y: 0 });
+assert('aftermath then over', after.over && after.victory);
+
+const dens = new World(21);
+dens.setView(1280, 720);
+dens.god = true;
+for (let i = 0; i < 60 * 60; i += 1) {
+  dens.update(1 / 60, { x: Math.sin(i / 30) * 0.4, y: Math.cos(i / 40) * 0.4 });
+  while (dens.pendingLevels > 0) {
+    const c = dens.rollLevelChoices();
+    if (!c[0]) break;
+    dens.pickUpgrade(c[0]);
+  }
+}
+assert('one-minute crowd', dens.kills + dens.enemyCount >= 90);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {

@@ -5,7 +5,7 @@
 
 import { CONFIG, WAVES, KIND_CAPS } from './config.js';
 import { RNG, SpatialHash, circlesOverlap, dist2, lerp, lerpAngle, norm, xpToNext } from './math.js';
-import { applyUpgrade, rollChoices } from './upgrades.js';
+import { applyUpgrade, rollChoices, describeUpgrade } from './upgrades.js';
 
 /**
  * @param {number} cap
@@ -57,6 +57,9 @@ export class World {
     this.over = false;
     this.victory = false;
     this.god = false;
+    this.bossGrace = 0;
+    this.aftermath = 0;
+    this.fade = 0;
     this.shake = 0;
     this.hitstop = 0;
     this.killFlash = 0;
@@ -115,6 +118,7 @@ export class World {
       state: 0,
       stateT: 0,
       flash: 0,
+      flinch: 0,
     }));
 
     this.pBullets = makePool(CONFIG.maxPlayerBullets, () => ({
@@ -202,10 +206,18 @@ export class World {
    */
   update(dt, move) {
     if (this.over) return;
+    if (this.aftermath > 0) {
+      this._updateAftermath(dt);
+      return;
+    }
     if (this.hitstop > 0) {
       this.hitstop -= dt;
       dt *= 0.15;
       if (dt < 0) dt = 0;
+    }
+    if (this.bossGrace > 0) {
+      this.bossGrace = Math.max(0, this.bossGrace - dt);
+      this.stats.iFrame = Math.max(this.stats.iFrame, 0.08);
     }
 
     this.time += dt;
@@ -235,6 +247,35 @@ export class World {
       this.emit('death');
       this._burst(this.stats.x, this.stats.y, '#7ef9ff', 36, 280, 0.45);
       this.shake = Math.max(this.shake, 18);
+    }
+  }
+
+  /**
+   * ボス撃破後のスローとフェード。リザルトは余韻が終わってから。
+   * @param {number} dt
+   */
+  _updateAftermath(dt) {
+    this.aftermath = Math.max(0, this.aftermath - dt);
+    this.fade = Math.min(1, 1 - this.aftermath / CONFIG.aftermath);
+    const slow = dt * 0.28;
+    this.shake = Math.max(0, this.shake - dt * 3);
+    this.killFlash = Math.max(0, this.killFlash - dt);
+    this._updateParticles(slow);
+    this._updateGems(slow);
+    for (let i = 0; i < this.eBullets.length; i += 1) this.eBullets[i].alive = false;
+    for (let i = 0; i < this.pBullets.length; i += 1) {
+      const b = this.pBullets[i];
+      if (!b.alive) continue;
+      b.x += b.vx * slow * 0.4;
+      b.y += b.vy * slow * 0.4;
+      b.life -= dt;
+      if (b.life <= 0) b.alive = false;
+    }
+    this.camX = lerp(this.camX, this.stats.x, 1 - Math.exp(-6 * dt));
+    this.camY = lerp(this.camY, this.stats.y, 1 - Math.exp(-6 * dt));
+    if (this.aftermath <= 0) {
+      this.over = true;
+      this.emit('victory');
     }
   }
 
@@ -392,6 +433,8 @@ export class World {
     const warningAt = CONFIG.bossTime - CONFIG.bossWarning;
     if (!this.bossWarningPlayed && this.time >= warningAt && !this.bossSpawned) {
       this.bossWarningPlayed = true;
+      this._clearEnemyBullets();
+      this.stats.iFrame = Math.max(this.stats.iFrame, 1.0);
       this.emit('warning');
     }
     if (!this.bossSpawned && this.time >= CONFIG.bossTime) {
@@ -407,13 +450,21 @@ export class World {
     if (this.bossDefeated) interval *= 0.85;
 
     this.spawnCd -= dt;
+    if (this._isArenaClearing()) {
+      this.spawnCd = Math.max(this.spawnCd, 0.25);
+      return;
+    }
     while (this.spawnCd <= 0) {
       this.spawnCd += interval;
       if (this.enemyCount >= CONFIG.maxEnemies) break;
-      const kind = this._pickKind(wave.kinds);
-      if (!kind) break;
-      const pos = this._spawnPos();
-      this.spawnEnemy(kind, pos.x, pos.y);
+      const batch = wave.batch || 1;
+      for (let n = 0; n < batch; n += 1) {
+        if (this.enemyCount >= CONFIG.maxEnemies) break;
+        const kind = this._pickKind(wave.kinds);
+        if (!kind) break;
+        const pos = this._spawnPos();
+        this.spawnEnemy(kind, pos.x, pos.y);
+      }
     }
   }
 
@@ -485,6 +536,7 @@ export class World {
     e.state = 0;
     e.stateT = 0;
     e.flash = 0;
+    e.flinch = 0;
     e.pattern = 0;
     this.enemyCount += 1;
     this.kindCounts[kind] += 1;
@@ -494,16 +546,55 @@ export class World {
   _spawnBoss() {
     if (this.bossSpawned) return;
     this.bossSpawned = true;
+    this._clearEnemyBullets();
+    this._knockbackTrash();
+    this.bossGrace = CONFIG.bossGrace;
+    this.stats.iFrame = Math.max(this.stats.iFrame, 1.5);
     const p = this.stats;
-    const b = this.spawnEnemy('boss', p.x + 320, p.y - 40);
+    const dist = Math.max(this._viewW, this._viewH) * 0.42;
+    const ang = this.rng.range(0, Math.PI * 2);
+    const b = this.spawnEnemy('boss', p.x + Math.cos(ang) * dist, p.y + Math.sin(ang) * dist);
     if (b) {
       b.hp = CONFIG.enemies.boss.hp;
       b.maxHp = b.hp;
       b.pattern = 0;
-      b.stateT = 0;
+      b.stateT = CONFIG.bossGrace;
     }
     this.emit('boss');
     this.shake = 12;
+    this._ring(p.x, p.y, '#ffd166', 48);
+  }
+
+  /** 警告〜出現余白では雑魚弾を出さない */
+  _isArenaClearing() {
+    if (this.bossGrace > 0) return true;
+    if (this.bossWarningPlayed && !this.bossSpawned) return true;
+    return false;
+  }
+
+  _clearEnemyBullets() {
+    for (let i = 0; i < this.eBullets.length; i += 1) {
+      this.eBullets[i].alive = false;
+    }
+  }
+
+  /** 自機周辺の雑魚を弾き、密着スポーンキルを防ぐ */
+  _knockbackTrash() {
+    const p = this.stats;
+    for (let i = 0; i < this.enemies.length; i += 1) {
+      const e = this.enemies[i];
+      if (!e.alive || e.kind === 'boss') continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < 280) {
+        const n = d < 1e-3 ? { x: 1, y: 0 } : norm(e.x - p.x, e.y - p.y);
+        const force = d < 110 ? 520 : 360;
+        e.vx = n.x * force;
+        e.vy = n.y * force;
+        e.x += n.x * 36;
+        e.y += n.y * 36;
+        e.flinch = 0.7;
+      }
+    }
   }
 
   /**
@@ -515,8 +606,16 @@ export class World {
       const e = this.enemies[i];
       if (!e.alive) continue;
       e.flash = Math.max(0, e.flash - dt * 8);
+      e.flinch = Math.max(0, (e.flinch || 0) - dt);
       if (e.kind === 'boss') {
         this._updateBoss(e, dt);
+        continue;
+      }
+      if (e.flinch > 0) {
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        e.vx *= 0.88;
+        e.vy *= 0.88;
         continue;
       }
       const dx = p.x - e.x;
@@ -535,29 +634,29 @@ export class World {
         e.vy = (dy / d) * def.speed * seek;
         e.vx += -dy / d * 22;
         e.fireCd -= dt;
-        if (e.fireCd <= 0 && d < 460) {
+        if (!this._isArenaClearing() && e.fireCd <= 0 && d < 460) {
           e.fireCd = def.fireInterval;
           const base = Math.atan2(dy, dx);
           for (let k = -1; k <= 1; k += 1) {
-            this._spawnEBullet(e.x, e.y, base + k * 0.22, 150, 4.2, '#c77dff', 9);
+            this._spawnEBullet(e.x, e.y, base + k * 0.22, 150, 4.2, CONFIG.bullets.danger, 9);
           }
         }
       } else if (e.kind === 'spiral') {
         e.vx = (dx / d) * def.speed;
         e.vy = (dy / d) * def.speed;
         e.fireCd -= dt;
-        if (e.fireCd <= 0 && d < 520) {
+        if (!this._isArenaClearing() && e.fireCd <= 0 && d < 520) {
           e.fireCd = def.fireInterval;
           e.phase += 0.42;
-          this._spawnEBullet(e.x, e.y, e.phase, 135, 4, '#4cc9f0', 8);
+          this._spawnEBullet(e.x, e.y, e.phase, 135, 4, CONFIG.bullets.dangerHot, 8);
         }
       } else if (e.kind === 'tank') {
         e.vx = (dx / d) * def.speed;
         e.vy = (dy / d) * def.speed;
         e.fireCd -= dt;
-        if (e.fireCd <= 0 && d < 500) {
+        if (!this._isArenaClearing() && e.fireCd <= 0 && d < 500) {
           e.fireCd = def.fireInterval;
-          this._spawnEBullet(e.x, e.y, Math.atan2(dy, dx), 120, 7.5, '#f4a261', 14);
+          this._spawnEBullet(e.x, e.y, Math.atan2(dy, dx), 120, 7.5, CONFIG.bullets.dangerGold, 14);
         }
       } else if (e.kind === 'dasher') {
         e.stateT -= dt;
@@ -618,36 +717,36 @@ export class World {
     e.stateT -= dt;
     e.pattern = phase;
 
-    if (e.stateT > 0) return;
+    if (this.bossGrace > 0 || e.stateT > 0) return;
 
     if (phase === 1) {
       e.stateT = 0.85;
       const base = Math.atan2(dy, dx);
       for (let k = -2; k <= 2; k += 1) {
-        this._spawnEBullet(e.x, e.y, base + k * 0.16, 175, 5.5, '#ff6b9d', 11);
+        this._spawnEBullet(e.x, e.y, base + k * 0.16, 175, 5.5, CONFIG.bullets.danger, 11);
       }
       if (this.rng.next() < 0.35) {
-        this._ringBullets(e.x, e.y, 10, e.phase, 130, '#ff2d6a');
+        this._ringBullets(e.x, e.y, 10, e.phase, 130, CONFIG.bullets.dangerHot);
       }
     } else if (phase === 2) {
       e.stateT = 0.11;
       const arms = 3;
       for (let a = 0; a < arms; a += 1) {
         const ang = e.phase * 1.7 + (a / arms) * Math.PI * 2;
-        this._spawnEBullet(e.x, e.y, ang, 148, 4.6, '#ffd166', 10);
+        this._spawnEBullet(e.x, e.y, ang, 148, 4.6, CONFIG.bullets.dangerGold, 10);
       }
       if (this.rng.next() < 0.08) {
         const base = Math.atan2(dy, dx);
         for (let k = -1; k <= 1; k += 1) {
-          this._spawnEBullet(e.x, e.y, base + k * 0.12, 210, 5, '#ffffff', 11);
+          this._spawnEBullet(e.x, e.y, base + k * 0.12, 210, 5, CONFIG.bullets.dangerHot, 11);
         }
       }
     } else {
       e.stateT = 0.7;
-      this._ringBullets(e.x, e.y, 16, e.phase, 155, '#ff2d6a');
-      this._ringBullets(e.x, e.y, 12, e.phase + 0.2, 120, '#7ef9ff');
+      this._ringBullets(e.x, e.y, 16, e.phase, 155, CONFIG.bullets.danger);
+      this._ringBullets(e.x, e.y, 12, e.phase + 0.2, 120, CONFIG.bullets.dangerGold);
       const base = Math.atan2(dy, dx);
-      this._spawnEBullet(e.x, e.y, base, 230, 8, '#ffffff', 16);
+      this._spawnEBullet(e.x, e.y, base, 230, 8, CONFIG.bullets.dangerHot, 16);
       if (this.kindCounts.grunt < 20) {
         const pos = this._spawnPos();
         this.spawnEnemy('grunt', pos.x, pos.y);
@@ -680,6 +779,7 @@ export class World {
    * @param {number} dmg
    */
   _spawnEBullet(x, y, angle, speed, r, color, dmg) {
+    if (this._isArenaClearing()) return;
     const b = alloc(this.eBullets);
     if (!b) return;
     b.alive = true;
@@ -802,6 +902,11 @@ export class World {
     if (!e.alive) return;
     e.hp -= dmg;
     e.flash = 1;
+    e.flinch = e.kind === 'boss' ? 0.05 : 0.12;
+    const n = norm(e.x - hx, e.y - hy);
+    const kick = e.kind === 'boss' ? 48 : 210;
+    e.vx += n.x * kick;
+    e.vy += n.y * kick;
     if (e.kind === 'boss') {
       this.hitstop = Math.max(this.hitstop, 0.018);
     }
@@ -825,7 +930,8 @@ export class World {
     this.comboTimer = 1.6;
     this.score += def.score + this.combo * 2;
     this.killFlash = Math.min(1, this.killFlash + 0.12);
-    this.shake = Math.max(this.shake, e.kind === 'boss' ? 20 : e.kind === 'tank' ? 5 : 2.2);
+    const comboShake = Math.min(11, 2 + this.combo * 0.45);
+    this.shake = Math.max(this.shake, e.kind === 'boss' ? 20 : comboShake);
 
     const gemN = e.kind === 'boss' ? 12 : e.kind === 'tank' ? 3 : 1;
     for (let i = 0; i < gemN; i += 1) {
@@ -846,8 +952,9 @@ export class World {
     if (e.kind === 'boss') {
       this.bossDefeated = true;
       this.victory = true;
-      this.over = true;
-      this.emit('victory');
+      this.aftermath = CONFIG.aftermath;
+      this.fade = 0;
+      this._clearEnemyBullets();
       this._burst(e.x, e.y, '#ffffff', 64, 420, 0.7);
     }
   }
@@ -925,7 +1032,7 @@ export class World {
    * @returns {import('./upgrades.js').UpgradeDef[]}
    */
   rollLevelChoices() {
-    return rollChoices(this.ranks, this.rng, 3);
+    return rollChoices(this.ranks, this.rng, 3, this.level);
   }
 
   /**
@@ -935,6 +1042,13 @@ export class World {
     applyUpgrade(this.stats, def, this.ranks);
     this.pendingLevels = Math.max(0, this.pendingLevels - 1);
     this.emit('upgrade');
+  }
+
+  /**
+   * @param {import('./upgrades.js').UpgradeDef} def
+   */
+  describeChoice(def) {
+    return describeUpgrade(def, this.stats, this.ranks);
   }
 
   /**
