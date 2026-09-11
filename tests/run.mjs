@@ -3,7 +3,7 @@
  */
 import { circlesOverlap, dist2, RNG, SpatialHash, xpToNext } from '../js/math.js';
 import { applyUpgrade, describeNova, describeOrbit, describeUpgrade, rollChoices, UPGRADES } from '../js/upgrades.js';
-import { CONFIG } from '../js/config.js';
+import { CONFIG, KIND_CAPS } from '../js/config.js';
 import { World } from '../js/world.js';
 
 let failed = 0;
@@ -81,6 +81,7 @@ world.stats.iFrame = 0;
 world._hurt(30, 10, 0);
 assert('hurt reduces hp', world.stats.hp === CONFIG.player.maxHp - 30);
 assert('iframe granted', world.stats.iFrame > 0);
+assert('hurt knockback separates pile', world.stats.x < -40);
 
 world.pendingLevels = 0;
 world.xp = 0;
@@ -263,6 +264,102 @@ for (let i = 0; i < 8 * 60; i += 1) {
 }
 assert('boss fight trash capped', bossRun.kindCounts.grunt <= 8);
 assert('few elites in boss', bossRun.kindCounts.spreader <= 2 && bossRun.kindCounts.spiral <= 1);
+
+assert('grunt contact eased for 1min band', CONFIG.enemies.grunt.contact <= 4);
+assert('dasher contact and cap eased', CONFIG.enemies.dasher.contact <= 6 && KIND_CAPS.dasher <= 5);
+assert('iframe covers contact pile', CONFIG.player.iFrame >= 1);
+
+/**
+ * 近くの敵の重心から逃げつつ円を描く。平均的なカイト操作の近似。
+ * @param {World} w
+ * @param {number} i
+ * @returns {{x: number, y: number}}
+ */
+function kiteInput(w, i) {
+  const p = w.stats;
+  let cx = 0;
+  let cy = 0;
+  let wsum = 0;
+  for (let ei = 0; ei < w.enemies.length; ei += 1) {
+    const e = w.enemies[ei];
+    if (!e.alive) continue;
+    const dx = e.x - p.x;
+    const dy = e.y - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 240 && d > 0.1) {
+      const wt = 1 / d;
+      cx += e.x * wt;
+      cy += e.y * wt;
+      wsum += wt;
+    }
+  }
+  if (wsum <= 0) {
+    return { x: Math.sin(i / 40), y: Math.cos(i / 55) };
+  }
+  cx /= wsum;
+  cy /= wsum;
+  let dx = p.x - cx;
+  let dy = p.y - cy;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len;
+  dy /= len;
+  return { x: dx * 0.82 - dy * 0.52, y: dy * 0.82 + dx * 0.52 };
+}
+
+/**
+ * @param {World} w
+ */
+function drainLevelUps(w) {
+  while (w.pendingLevels > 0) {
+    const c = w.rollLevelChoices();
+    if (!c[0]) break;
+    w.pickUpgrade(c[0]);
+  }
+}
+
+const survivalSeeds = [3, 11, 21, 42, 77, 99];
+let survivedMinute = 0;
+for (let s = 0; s < survivalSeeds.length; s += 1) {
+  const run = new World(survivalSeeds[s]);
+  run.setView(1280, 720);
+  let alive = true;
+  for (let i = 0; i < 60 * 60; i += 1) {
+    run.update(1 / 60, kiteInput(run, i));
+    drainLevelUps(run);
+    if (run.over || run.stats.hp <= 0) {
+      alive = false;
+      break;
+    }
+  }
+  if (alive) survivedMinute += 1;
+}
+assert('average kiting survives about 60s', survivedMinute >= 5);
+
+const pile = new World(2);
+pile.setView(1280, 720);
+for (let i = 0; i < 24; i += 1) {
+  const a = (i / 24) * Math.PI * 2;
+  pile.spawnEnemy('grunt', Math.cos(a) * 14, Math.sin(a) * 14);
+}
+for (let i = 0; i < 3; i += 1) {
+  pile.spawnEnemy('dasher', 18 + i * 6, 0);
+}
+for (let i = 0; i < 12 * 60; i += 1) {
+  pile.update(1 / 60, kiteInput(pile, i));
+  drainLevelUps(pile);
+}
+assert('contact pile does not melt in 12s', pile.stats.hp > 0 && !pile.over);
+
+const p3 = new World(8);
+p3.setView(1280, 720);
+p3.god = true;
+p3.bossGrace = 0;
+const bossBody = p3.spawnEnemy('boss', 0, -200);
+bossBody.hp = bossBody.maxHp * 0.2;
+bossBody.stateT = 0;
+p3._updateBoss(bossBody, 1 / 60);
+const p3n = p3.eBullets.filter((b) => b.alive).length;
+assert('phase3 ring is a readable staircase', p3n <= 12 && p3n >= 8);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
