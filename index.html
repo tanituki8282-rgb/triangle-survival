@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="theme-color" content="#07080f" />
+    <title>Triangle Survival / トライアングルサバイバル</title>
+    <meta
+      name="description"
+      content="三角形の自機で群れをなぎ倒し、弾幕をかわし、ボスを討つブラウザサバイバルシューティング。"
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%2307080f' width='64' height='64'/%3E%3Cpath fill='%237ef9ff' d='M52 32 L12 50 L20 32 L12 14 Z'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" aria-label="Triangle Survival game canvas"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="hud-top">
+          <div class="bars">
+            <div class="bar-label">HULL</div>
+            <div class="bar hp"><div id="hp-fill"></div></div>
+            <div id="hp-text">100 / 100</div>
+            <div class="bar-label">XP</div>
+            <div class="bar xp"><div id="xp-fill"></div></div>
+          </div>
+          <div class="hud-meta">
+            <div id="lv-text">Lv 1</div>
+            <div id="time-text">0:00</div>
+            <div class="kills">KILLS <span id="kill-text">0</span></div>
+          </div>
+        </div>
+        <div id="boss-bar" class="hidden">
+          <div class="boss-name">PRISM OVERLORD / プリズムオーバーロード</div>
+          <div class="bar boss"><div id="boss-fill"></div></div>
+        </div>
+        <button id="mute-btn" type="button" aria-pressed="false">SE ON</button>
+      </div>
+
+      <section id="title-screen" class="panel">
+        <p class="eyebrow">GEOMETRIC ARENA SURVIVAL</p>
+        <h1>TRIANGLE SURVIVAL</h1>
+        <p class="jp-title">トライアングルサバイバル</p>
+        <p class="lead">
+          三角形の自機を操り、押し寄せる幾何学の群れをなぎ倒し、<br />
+          読みやすい弾幕をかわしながら強化せよ。105秒後、ボスが降りる。
+        </p>
+        <ul class="controls">
+          <li><kbd>WASD</kbd> / <kbd>矢印</kbd> 移動</li>
+          <li>照準と射撃は自動（最寄りの敵）</li>
+          <li><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> レベルアップ選択</li>
+          <li><kbd>P</kbd> / <kbd>Esc</kbd> ポーズ　<kbd>M</kbd> ミュート</li>
+        </ul>
+        <button id="btn-start" type="button" class="primary">START / 出撃</button>
+        <p class="hint">クリックか Enter / Space で開始（音が解錠されます）</p>
+      </section>
+
+      <section id="levelup-screen" class="panel hidden">
+        <h2>LEVEL UP</h2>
+        <p class="lead">強化回路を選べ</p>
+        <div id="upgrade-cards" class="cards"></div>
+      </section>
+
+      <section id="pause-screen" class="panel hidden">
+        <h2>PAUSE</h2>
+        <p class="lead">戦場は止まっている</p>
+        <button id="btn-resume" type="button" class="primary">RESUME</button>
+      </section>
+
+      <section id="result-screen" class="panel hidden">
+        <h2 id="result-title">機体喪失</h2>
+        <p id="result-sub" class="lead">弾幕の海に沈んだ</p>
+        <dl class="stats">
+          <div><dt>生存</dt><dd id="stat-time">0:00</dd></div>
+          <div><dt>撃破</dt><dd id="stat-kills">0</dd></div>
+          <div><dt>レベル</dt><dd id="stat-level">1</dd></div>
+          <div><dt>スコア</dt><dd id="stat-score">0</dd></div>
+        </dl>
+        <div class="row">
+          <button id="btn-retry" type="button" class="primary">RETRY / 再出撃</button>
+          <button id="btn-title" type="button" class="ghost">TITLE</button>
+        </div>
+        <p class="hint">Enter または R で再出撃</p>
+      </section>
+    </div>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
