@@ -118,8 +118,8 @@ export class Game {
       this.world.update(dt * (this._timeScale || 1), this.input.moveAxis());
       this._consumeEvents();
       this.ui.updateHud(this.world);
-      if (this.world.aftermath > 0) {
-        // 撃破余韻中はレベルアップを挟まない
+      if (this.world.victory || this.world.aftermath > 0) {
+        if (this.world.over) this._enterResult();
       } else if (this.world.pendingLevels > 0) {
         this._enterLevelUp();
       } else if (this.world.over) {
@@ -198,6 +198,10 @@ export class Game {
   }
 
   _enterLevelUp() {
+    if (this.world.victory || this.world.aftermath > 0) {
+      this.world.pendingLevels = 0;
+      return;
+    }
     this.choices = this.world.rollLevelChoices();
     if (this.choices.length === 0) {
       this.world.pendingLevels = 0;

@@ -45,6 +45,19 @@ export const CONFIG = {
     knockback: 90,
   },
 
+  /** 衛星刃・ノヴァの見た目数値。カード文言と同期する */
+  orbit: {
+    radiusBase: 42,
+    radiusStep: 8,
+  },
+  nova: {
+    shotsBase: 8,
+    shotsStep: 4,
+    cdBase: 2.35,
+    cdStep: 0.28,
+    cdMin: 0.85,
+  },
+
   xp: {
     base: 6,
     growth: 1.28,
@@ -61,7 +74,7 @@ export const CONFIG = {
       speed: 86,
       xp: 1,
       color: '#ff5d73',
-      contact: 10,
+      contact: 7,
       score: 10,
     },
     spreader: {
@@ -70,7 +83,7 @@ export const CONFIG = {
       speed: 62,
       xp: 2,
       color: '#c77dff',
-      contact: 12,
+      contact: 9,
       score: 22,
       fireInterval: 2.15,
       preferredRange: 230,
@@ -81,7 +94,7 @@ export const CONFIG = {
       speed: 48,
       xp: 3,
       color: '#d65cff',
-      contact: 12,
+      contact: 9,
       score: 30,
       fireInterval: 0.16,
     },
@@ -101,7 +114,7 @@ export const CONFIG = {
       speed: 70,
       xp: 2,
       color: '#ff8c42',
-      contact: 13,
+      contact: 10,
       score: 24,
       dashSpeed: 420,
       windup: 0.38,
@@ -143,11 +156,11 @@ export const CONFIG = {
 export const WAVES = [
   { t: 0, interval: 0.72, batch: 1, kinds: ['grunt'] },
   { t: 12, interval: 0.5, batch: 1, kinds: ['grunt', 'grunt', 'grunt', 'spreader'] },
-  { t: 28, interval: 0.38, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
-  { t: 48, interval: 0.28, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
-  { t: 60, interval: 0.22, batch: 3, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
-  { t: 78, interval: 0.2, batch: 3, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
-  { t: 100, interval: 0.2, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 28, interval: 0.4, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
+  { t: 48, interval: 0.32, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
+  { t: 60, interval: 0.28, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
+  { t: 78, interval: 0.26, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 100, interval: 0.24, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
 ];
 
 /** 種ごとの同時存在上限。弾幕の可読性を守る */
@@ -157,5 +170,15 @@ export const KIND_CAPS = {
   spiral: 3,
   tank: 6,
   dasher: 12,
+  boss: 1,
+};
+
+/** ボス戦中の雑魚上限。弾海を濁さない */
+export const BOSS_KIND_CAPS = {
+  grunt: 8,
+  spreader: 2,
+  spiral: 1,
+  tank: 1,
+  dasher: 2,
   boss: 1,
 };
