@@ -257,6 +257,7 @@ kbd {
 .card {
   width: 240px;
   min-height: 210px;
+  background: rgba(12, 16, 28, 0.94);
   background: var(--panel);
   border: 1px solid var(--line);
   color: var(--text);
@@ -301,9 +302,9 @@ kbd {
 
 .card .rank {
   display: block;
-  font-family: Orbitron, sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-family: "Zen Kaku Gothic New", "Segoe UI", sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
   color: var(--accent);
   margin-bottom: 8px;
 }
@@ -311,8 +312,9 @@ kbd {
 .card .delta {
   margin-top: 10px;
   color: var(--gold);
-  font-family: Orbitron, sans-serif;
-  font-size: 12px;
+  font-family: "Zen Kaku Gothic New", "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 #levelup-screen {

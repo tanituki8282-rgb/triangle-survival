@@ -82,7 +82,7 @@ export class Renderer {
       this._minimapHint(ctx, world, extra.fps, extra.showFps);
     }
     if (extra.paused) {
-      ctx.fillStyle = extra.levelup ? 'rgba(0,0,0,0.62)' : 'rgba(0,0,0,0.28)';
+      ctx.fillStyle = extra.levelup ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.28)';
       ctx.fillRect(0, 0, w, h);
     }
     if (extra.fade > 0) {
@@ -332,7 +332,7 @@ export class Renderer {
   _gems(ctx, world) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = '#5dff7a';
+    ctx.fillStyle = '#9dff3a';
     ctx.strokeStyle = 'rgba(20, 40, 24, 0.85)';
     ctx.lineWidth = 1.5;
     ctx.shadowBlur = 0;

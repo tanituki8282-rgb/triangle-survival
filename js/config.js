@@ -48,7 +48,7 @@ export const CONFIG = {
   xp: {
     base: 6,
     growth: 1.28,
-    gemRadius: 6.5,
+    gemRadius: 8,
     gemSpeed: 620,
     vacuumAge: 0.45,
   },
