@@ -143,15 +143,119 @@ export const UPGRADES = [
  * @param {Record<string, number>} ranks
  * @param {InstanceType<import('./math.js').RNG>} rng
  * @param {number} count
+ * @param {number} [level]
  * @returns {UpgradeDef[]}
  */
-export function rollChoices(ranks, rng, count = 3) {
+export function rollChoices(ranks, rng, count = 3, level = 1) {
   const pool = UPGRADES.filter((u) => (ranks[u.id] || 0) < u.max);
   if (pool.length === 0) {
     return [];
   }
-  const shuffled = rng.shuffle(pool);
-  return shuffled.slice(0, Math.min(count, shuffled.length));
+  const remaining = pool.slice();
+  const out = [];
+  while (out.length < Math.min(count, pool.length) && remaining.length > 0) {
+    const weights = remaining.map((u) => {
+      if (level <= 6 && (u.id === 'orbit' || u.id === 'nova')) return 5;
+      return 1;
+    });
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = rng.next() * total;
+    let idx = remaining.length - 1;
+    for (let i = 0; i < remaining.length; i += 1) {
+      r -= weights[i];
+      if (r <= 0) {
+        idx = i;
+        break;
+      }
+    }
+    out.push(remaining.splice(idx, 1)[0]);
+  }
+  return out;
+}
+
+/**
+ * @param {object} stats
+ * @returns {object}
+ */
+function cloneStats(stats) {
+  return {
+    fireInterval: stats.fireInterval,
+    bulletDamage: stats.bulletDamage,
+    projectileCount: stats.projectileCount,
+    pierce: stats.pierce,
+    speed: stats.speed,
+    maxHp: stats.maxHp,
+    hp: stats.hp,
+    magnet: stats.magnet,
+    orbitCount: stats.orbitCount,
+    novaLevel: stats.novaLevel,
+    lifesteal: stats.lifesteal,
+    bulletSpeed: stats.bulletSpeed,
+    bulletLife: stats.bulletLife,
+    regen: stats.regen,
+  };
+}
+
+/**
+ * @param {string} key
+ * @param {number} v
+ * @returns {string}
+ */
+export function formatStat(key, v) {
+  if (key === 'fireInterval') return `${v.toFixed(2)}s`;
+  if (key === 'bulletDamage') return `${Math.round(v)}`;
+  if (key === 'projectileCount') return `${v | 0}`;
+  if (key === 'pierce') return `${v | 0}`;
+  if (key === 'speed') return `${Math.round(v)}`;
+  if (key === 'maxHp') return `${Math.round(v)}`;
+  if (key === 'magnet') return `${Math.round(v)}`;
+  if (key === 'orbitCount') return `${v | 0}`;
+  if (key === 'novaLevel') return `${v | 0}`;
+  if (key === 'lifesteal') return `${Math.round(v * 100)}%`;
+  if (key === 'bulletSpeed') return `${Math.round(v)}`;
+  if (key === 'regen') return `${v.toFixed(1)}/s`;
+  return String(v);
+}
+
+const DIFF_KEYS = [
+  'fireInterval',
+  'bulletDamage',
+  'projectileCount',
+  'pierce',
+  'speed',
+  'maxHp',
+  'magnet',
+  'orbitCount',
+  'novaLevel',
+  'lifesteal',
+  'bulletSpeed',
+  'regen',
+];
+
+/**
+ * カード用の現在ランクと数値差分。
+ * @param {UpgradeDef} def
+ * @param {object} stats
+ * @param {Record<string, number>} ranks
+ * @returns {{rank: number, nextRank: number, max: number, deltaText: string}}
+ */
+export function describeUpgrade(def, stats, ranks) {
+  const rank = ranks[def.id] || 0;
+  const before = cloneStats(stats);
+  const after = cloneStats(stats);
+  def.apply(after, rank + 1);
+  const parts = [];
+  for (let i = 0; i < DIFF_KEYS.length; i += 1) {
+    const key = DIFF_KEYS[i];
+    if (Math.abs((after[key] || 0) - (before[key] || 0)) < 1e-6) continue;
+    parts.push(`${formatStat(key, before[key])}→${formatStat(key, after[key])}`);
+  }
+  return {
+    rank,
+    nextRank: rank + 1,
+    max: def.max,
+    deltaText: parts.join('  '),
+  };
 }
 
 /**

@@ -77,14 +77,16 @@ export class UI {
   /**
    * @param {import('./upgrades.js').UpgradeDef[]} choices
    * @param {(def: import('./upgrades.js').UpgradeDef) => void} onPick
+   * @param {import('./world.js').World} world
    */
-  showChoices(choices, onPick) {
+  showChoices(choices, onPick, world) {
     this.cards.innerHTML = '';
     choices.forEach((def, idx) => {
+      const info = world.describeChoice(def);
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'card';
-      btn.innerHTML = `<span class="key">${idx + 1}</span><span class="glyph">${def.glyph}</span><strong>${def.name}</strong><p>${def.desc}</p>`;
+      btn.innerHTML = `<span class="key">${idx + 1}</span><span class="glyph">${def.glyph}</span><strong>${def.name}</strong><span class="rank">RANK ${info.rank}→${info.nextRank} / ${info.max}</span><p>${def.desc}</p><p class="delta">${info.deltaText}</p>`;
       btn.addEventListener('click', () => onPick(def));
       this.cards.appendChild(btn);
     });

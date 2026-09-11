@@ -12,6 +12,10 @@ export const CONFIG = {
   /** 生存時間（秒）。この時刻にボス出現 */
   bossTime: 105,
   bossWarning: 4,
+  /** ボス出現後、弾幕と近接を止める余白 */
+  bossGrace: 2.6,
+  /** 撃破後のスロー余韻 */
+  aftermath: 2.4,
   /** 同時存在上限（ボス除く） */
   maxEnemies: 160,
   maxPlayerBullets: 220,
@@ -76,7 +80,7 @@ export const CONFIG = {
       hp: 34,
       speed: 48,
       xp: 3,
-      color: '#4cc9f0',
+      color: '#d65cff',
       contact: 12,
       score: 30,
       fireInterval: 0.16,
@@ -96,7 +100,7 @@ export const CONFIG = {
       hp: 20,
       speed: 70,
       xp: 2,
-      color: '#80ed99',
+      color: '#ff8c42',
       contact: 13,
       score: 24,
       dashSpeed: 420,
@@ -120,6 +124,10 @@ export const CONFIG = {
     enemyRadius: 4.2,
     enemyLife: 3.6,
     enemyDamage: 9,
+    /** 敵弾は危険色で統一。自機シアンと混ぜない */
+    danger: '#ff4a2a',
+    dangerHot: '#ff7a32',
+    dangerGold: '#ffb347',
   },
 
   camera: {
@@ -133,13 +141,13 @@ export const CONFIG = {
  * interval は1体あたり秒、kinds は重み付き抽選。
  */
 export const WAVES = [
-  { t: 0, interval: 1.05, kinds: ['grunt'] },
-  { t: 12, interval: 0.78, kinds: ['grunt', 'grunt', 'spreader'] },
-  { t: 28, interval: 0.64, kinds: ['grunt', 'grunt', 'spreader', 'dasher'] },
-  { t: 48, interval: 0.52, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
-  { t: 70, interval: 0.44, kinds: ['grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
-  { t: 92, interval: 0.4, kinds: ['grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
-  { t: 130, interval: 0.36, kinds: ['grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 0, interval: 0.72, batch: 1, kinds: ['grunt'] },
+  { t: 12, interval: 0.5, batch: 1, kinds: ['grunt', 'grunt', 'grunt', 'spreader'] },
+  { t: 28, interval: 0.38, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
+  { t: 48, interval: 0.28, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
+  { t: 60, interval: 0.22, batch: 3, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
+  { t: 78, interval: 0.2, batch: 3, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 100, interval: 0.2, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
 ];
 
 /** 種ごとの同時存在上限。弾幕の可読性を守る */

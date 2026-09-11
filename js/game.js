@@ -31,6 +31,8 @@ export class Game {
     /** @type {import('./upgrades.js').UpgradeDef[]} */
     this.choices = [];
     this.raf = 0;
+    const q = new URLSearchParams(window.location.search);
+    this._debug = q.get('debug') === '1';
 
     this._onResize = () => {
       this.renderer.resize();
@@ -78,6 +80,7 @@ export class Game {
   _applyDebugFlags(world) {
     const q = new URLSearchParams(window.location.search);
     this._timeScale = Math.max(1, Number(q.get('fast') || 1) || 1);
+    this._debug = q.get('debug') === '1';
     if (q.get('god') === '1') {
       world.god = true;
       world.stats.maxHp = 9999;
@@ -115,7 +118,9 @@ export class Game {
       this.world.update(dt * (this._timeScale || 1), this.input.moveAxis());
       this._consumeEvents();
       this.ui.updateHud(this.world);
-      if (this.world.pendingLevels > 0) {
+      if (this.world.aftermath > 0) {
+        // 撃破余韻中はレベルアップを挟まない
+      } else if (this.world.pendingLevels > 0) {
         this._enterLevelUp();
       } else if (this.world.over) {
         this._enterResult();
@@ -126,7 +131,14 @@ export class Game {
 
     const paused = this.mode !== 'play';
     if (this.mode !== 'title') {
-      this.renderer.draw(this.world, dt, { fps: this.fps, paused });
+      this.renderer.draw(this.world, dt, {
+        fps: this.fps,
+        paused,
+        levelup: this.mode === 'levelup',
+        showFps: this._debug,
+        hideBullets: this.mode === 'levelup',
+        fade: this.world.fade || 0,
+      });
     } else {
       this._drawTitleBg(dt);
     }
@@ -193,7 +205,7 @@ export class Game {
     }
     this.mode = 'levelup';
     this.ui.setMode('levelup');
-    this.ui.showChoices(this.choices, (def) => this._pick(def));
+    this.ui.showChoices(this.choices, (def) => this._pick(def), this.world);
     this.audio.levelUp();
   }
 

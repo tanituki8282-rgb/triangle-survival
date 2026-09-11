@@ -33,7 +33,7 @@ export class Renderer {
   /**
    * @param {import('./world.js').World} world
    * @param {number} dt
-   * @param {{fps: number, paused: boolean, title?: boolean}} extra
+   * @param {{fps: number, paused: boolean, title?: boolean, levelup?: boolean, showFps?: boolean, hideBullets?: boolean, fade?: number}} extra
    */
   draw(world, dt, extra) {
     this.t += dt;
@@ -54,9 +54,9 @@ export class Renderer {
     this._grid(ctx, camX, camY, w, h);
     if (!extra.title) {
       this._gems(ctx, world);
-      this._eBullets(ctx, world);
+      if (!extra.hideBullets) this._eBullets(ctx, world);
       this._enemies(ctx, world);
-      this._pBullets(ctx, world);
+      if (!extra.hideBullets) this._pBullets(ctx, world);
       this._orbits(ctx, world);
       this._player(ctx, world);
       this._particles(ctx, world);
@@ -75,10 +75,18 @@ export class Renderer {
       if (world.bossWarningPlayed && !world.bossSpawned) {
         this._warning(ctx, w, h);
       }
-      this._minimapHint(ctx, world, extra.fps);
+      if (world.bossGrace > 0) {
+        ctx.fillStyle = `rgba(255, 209, 102, ${0.08 + Math.sin(this.t * 6) * 0.04})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+      this._minimapHint(ctx, world, extra.fps, extra.showFps);
     }
     if (extra.paused) {
-      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.fillStyle = extra.levelup ? 'rgba(0,0,0,0.62)' : 'rgba(0,0,0,0.28)';
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (extra.fade > 0) {
+      ctx.fillStyle = `rgba(4, 6, 14, ${extra.fade * 0.55})`;
       ctx.fillRect(0, 0, w, h);
     }
   }
@@ -228,7 +236,7 @@ export class Renderer {
         ctx.strokeRect(-e.r + 4, -e.r + 4, e.r * 2 - 8, e.r * 2 - 8);
       } else if (e.kind === 'dasher') {
         if (e.state === 1) {
-          ctx.strokeStyle = 'rgba(128,237,153,0.7)';
+          ctx.strokeStyle = 'rgba(255,140,66,0.85)';
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
           ctx.moveTo(0, 0);
@@ -305,7 +313,7 @@ export class Renderer {
     for (let i = 0; i < world.eBullets.length; i += 1) {
       const b = world.eBullets[i];
       if (!b.alive) continue;
-      ctx.fillStyle = b.color || '#ff6b9d';
+      ctx.fillStyle = b.color || '#ff4a2a';
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
       ctx.fill();
@@ -325,6 +333,8 @@ export class Renderer {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = '#5dff7a';
+    ctx.strokeStyle = 'rgba(20, 40, 24, 0.85)';
+    ctx.lineWidth = 1.5;
     ctx.shadowBlur = 0;
     for (let i = 0; i < world.gems.length; i += 1) {
       const g = world.gems[i];
@@ -340,6 +350,7 @@ export class Renderer {
       ctx.lineTo(g.x + -c * r, g.y + -s * r);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -394,12 +405,15 @@ export class Renderer {
    * @param {CanvasRenderingContext2D} ctx
    * @param {import('./world.js').World} world
    * @param {number} fps
+   * @param {boolean} [showFps]
    */
-  _minimapHint(ctx, world, fps) {
-    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
-    ctx.fillStyle = 'rgba(220,235,255,0.75)';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${fps | 0} FPS`, this.w - 16, this.h - 42);
+  _minimapHint(ctx, world, fps, showFps) {
+    if (showFps) {
+      ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.fillStyle = 'rgba(220,235,255,0.75)';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${fps | 0} FPS`, this.w - 16, this.h - 42);
+    }
     if (world.combo >= 4) {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffe566';
