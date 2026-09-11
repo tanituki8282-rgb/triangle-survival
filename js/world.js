@@ -3,7 +3,7 @@
  * 自機・敵・弾・経験値・ボス・パーティクルを1フレームで更新する。
  */
 
-import { CONFIG, WAVES, KIND_CAPS } from './config.js';
+import { BOSS_KIND_CAPS, CONFIG, KIND_CAPS, WAVES } from './config.js';
 import { RNG, SpatialHash, circlesOverlap, dist2, lerp, lerpAngle, norm, xpToNext } from './math.js';
 import { applyUpgrade, rollChoices, describeUpgrade } from './upgrades.js';
 
@@ -210,6 +210,9 @@ export class World {
       this._updateAftermath(dt);
       return;
     }
+    if (this._isDanmakuLocked()) {
+      this._clearEnemyBullets();
+    }
     if (this.hitstop > 0) {
       this.hitstop -= dt;
       dt *= 0.15;
@@ -232,6 +235,9 @@ export class World {
     this._updateOrbits(dt);
     this._spawn(dt);
     this._updateEnemies(dt);
+    if (this._isDanmakuLocked()) {
+      this._clearEnemyBullets();
+    }
     this._updateBullets(dt);
     this._collide();
     this._updateGems(dt);
@@ -261,7 +267,6 @@ export class World {
     this.shake = Math.max(0, this.shake - dt * 3);
     this.killFlash = Math.max(0, this.killFlash - dt);
     this._updateParticles(slow);
-    this._updateGems(slow);
     for (let i = 0; i < this.eBullets.length; i += 1) this.eBullets[i].alive = false;
     for (let i = 0; i < this.pBullets.length; i += 1) {
       const b = this.pBullets[i];
@@ -311,7 +316,7 @@ export class World {
     p.novaCd -= dt;
     if (p.novaLevel > 0 && p.novaCd <= 0) {
       this._fireNova();
-      p.novaCd = Math.max(0.85, 2.35 - p.novaLevel * 0.28);
+      p.novaCd = Math.max(CONFIG.nova.cdMin, CONFIG.nova.cdBase - p.novaLevel * CONFIG.nova.cdStep);
     }
 
     if ((move.x !== 0 || move.y !== 0) && this.rng.next() < dt * 18) {
@@ -344,7 +349,7 @@ export class World {
 
   _fireNova() {
     const p = this.stats;
-    const count = 8 + p.novaLevel * 4;
+    const count = CONFIG.nova.shotsBase + p.novaLevel * CONFIG.nova.shotsStep;
     for (let i = 0; i < count; i += 1) {
       const a = (i / count) * Math.PI * 2 + p.orbitAngle;
       this._spawnPBullet(p.x + Math.cos(a) * 16, p.y + Math.sin(a) * 16, a, 1.05);
@@ -410,7 +415,7 @@ export class World {
     const p = this.stats;
     p.orbitAngle += dt * (1.8 + p.orbitCount * 0.25);
     if (p.orbitCount <= 0) return;
-    const radius = 42 + p.orbitCount * 8;
+    const radius = CONFIG.orbit.radiusBase + p.orbitCount * CONFIG.orbit.radiusStep;
     for (let i = 0; i < p.orbitCount; i += 1) {
       const a = p.orbitAngle + (i / p.orbitCount) * Math.PI * 2;
       const ox = p.x + Math.cos(a) * radius;
@@ -440,27 +445,33 @@ export class World {
     if (!this.bossSpawned && this.time >= CONFIG.bossTime) {
       this._spawnBoss();
     }
+    if (this._isDanmakuLocked()) {
+      this._clearEnemyBullets();
+      this.spawnCd = Math.max(this.spawnCd, 0.25);
+      return;
+    }
 
     let wave = WAVES[0];
     for (let i = 0; i < WAVES.length; i += 1) {
       if (this.time >= WAVES[i].t) wave = WAVES[i];
     }
     let interval = wave.interval;
-    if (this.bossSpawned && !this.bossDefeated) interval *= 2.4;
+    let batch = wave.batch || 1;
+    let kinds = wave.kinds;
+    if (this.bossSpawned && !this.bossDefeated) {
+      interval *= 7;
+      batch = 1;
+      kinds = ['grunt'];
+    }
     if (this.bossDefeated) interval *= 0.85;
 
     this.spawnCd -= dt;
-    if (this._isArenaClearing()) {
-      this.spawnCd = Math.max(this.spawnCd, 0.25);
-      return;
-    }
     while (this.spawnCd <= 0) {
       this.spawnCd += interval;
       if (this.enemyCount >= CONFIG.maxEnemies) break;
-      const batch = wave.batch || 1;
       for (let n = 0; n < batch; n += 1) {
         if (this.enemyCount >= CONFIG.maxEnemies) break;
-        const kind = this._pickKind(wave.kinds);
+        const kind = this._pickKind(kinds);
         if (!kind) break;
         const pos = this._spawnPos();
         this.spawnEnemy(kind, pos.x, pos.y);
@@ -473,12 +484,13 @@ export class World {
    * @returns {string | null}
    */
   _pickKind(kinds) {
+    const caps = this.bossSpawned && !this.bossDefeated ? BOSS_KIND_CAPS : KIND_CAPS;
     const shuffled = this.rng.shuffle(kinds);
     for (let i = 0; i < shuffled.length; i += 1) {
       const k = shuffled[i];
-      if (this.kindCounts[k] < KIND_CAPS[k]) return k;
+      if (this.kindCounts[k] < caps[k]) return k;
     }
-    if (this.kindCounts.grunt < KIND_CAPS.grunt) return 'grunt';
+    if (this.kindCounts.grunt < caps.grunt) return 'grunt';
     return null;
   }
 
@@ -565,11 +577,19 @@ export class World {
     this._ring(p.x, p.y, '#ffd166', 48);
   }
 
-  /** 警告〜出現余白では雑魚弾を出さない */
-  _isArenaClearing() {
-    if (this.bossGrace > 0) return true;
+  /** 警告開始〜grace終了まで敵弾を出さない */
+  _isDanmakuLocked() {
+    if (this.bossDefeated) return false;
+    const warningAt = CONFIG.bossTime - CONFIG.bossWarning;
+    if (this.time + 1e-6 >= warningAt && !this.bossSpawned) return true;
     if (this.bossWarningPlayed && !this.bossSpawned) return true;
+    if (this.bossGrace > 0) return true;
     return false;
+  }
+
+  /** @deprecated 旧名。ロック判定は _isDanmakuLocked */
+  _isArenaClearing() {
+    return this._isDanmakuLocked();
   }
 
   _clearEnemyBullets() {
@@ -747,10 +767,6 @@ export class World {
       this._ringBullets(e.x, e.y, 12, e.phase + 0.2, 120, CONFIG.bullets.dangerGold);
       const base = Math.atan2(dy, dx);
       this._spawnEBullet(e.x, e.y, base, 230, 8, CONFIG.bullets.dangerHot, 16);
-      if (this.kindCounts.grunt < 20) {
-        const pos = this._spawnPos();
-        this.spawnEnemy('grunt', pos.x, pos.y);
-      }
     }
   }
 
@@ -1018,6 +1034,7 @@ export class World {
    * @param {number} n
    */
   _addXp(n) {
+    if (this.victory || this.aftermath > 0) return;
     this.xp += n;
     while (this.xp >= this.xpNeed) {
       this.xp -= this.xpNeed;

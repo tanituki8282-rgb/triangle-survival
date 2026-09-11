@@ -3,6 +3,8 @@
  * スタックで意味のある強化差を出す。
  */
 
+import { CONFIG } from './config.js';
+
 /**
  * @typedef {Object} UpgradeDef
  * @property {string} id
@@ -89,7 +91,7 @@ export const UPGRADES = [
   {
     id: 'orbit',
     name: '衛星刃',
-    desc: '周囲を回る刃が1本増える',
+    desc: '周囲を回る刃が1本増え、軌道半径が広がる',
     glyph: '◦▲',
     max: 4,
     apply(stats) {
@@ -99,7 +101,7 @@ export const UPGRADES = [
   {
     id: 'nova',
     name: 'ノヴァパルス',
-    desc: '周期的に全方位弾を放つ',
+    desc: '周期的に全方位弾を放つ。弾数と周期が伸びる',
     glyph: '✱',
     max: 4,
     apply(stats) {
@@ -248,14 +250,42 @@ export function describeUpgrade(def, stats, ranks) {
   for (let i = 0; i < DIFF_KEYS.length; i += 1) {
     const key = DIFF_KEYS[i];
     if (Math.abs((after[key] || 0) - (before[key] || 0)) < 1e-6) continue;
+    if (key === 'orbitCount' || key === 'novaLevel') continue;
     parts.push(`${formatStat(key, before[key])}→${formatStat(key, after[key])}`);
   }
+  if (def.id === 'orbit') parts.push(describeOrbit(before.orbitCount, after.orbitCount));
+  if (def.id === 'nova') parts.push(describeNova(before.novaLevel, after.novaLevel));
   return {
     rank,
     nextRank: rank + 1,
     max: def.max,
     deltaText: parts.join('  '),
   };
+}
+
+/**
+ * @param {number} before
+ * @param {number} after
+ * @returns {string}
+ */
+export function describeOrbit(before, after) {
+  const r0 = before <= 0 ? 0 : CONFIG.orbit.radiusBase + before * CONFIG.orbit.radiusStep;
+  const r1 = CONFIG.orbit.radiusBase + after * CONFIG.orbit.radiusStep;
+  return `刃 ${before}本→${after}本  半径 ${Math.round(r0)}→${Math.round(r1)}`;
+}
+
+/**
+ * @param {number} before
+ * @param {number} after
+ * @returns {string}
+ */
+export function describeNova(before, after) {
+  const n0 = before <= 0 ? 0 : CONFIG.nova.shotsBase + before * CONFIG.nova.shotsStep;
+  const n1 = CONFIG.nova.shotsBase + after * CONFIG.nova.shotsStep;
+  const t0 = before <= 0 ? 0 : Math.max(CONFIG.nova.cdMin, CONFIG.nova.cdBase - before * CONFIG.nova.cdStep);
+  const t1 = Math.max(CONFIG.nova.cdMin, CONFIG.nova.cdBase - after * CONFIG.nova.cdStep);
+  if (before <= 0) return `全方位 ${n1}発  周期 ${t1.toFixed(2)}s`;
+  return `全方位 ${n0}発→${n1}発  周期 ${t0.toFixed(2)}s→${t1.toFixed(2)}s`;
 }
 
 /**

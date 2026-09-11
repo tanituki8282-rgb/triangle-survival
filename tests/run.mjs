@@ -2,7 +2,7 @@
  * Node から呼べる純粋ロジックの回帰テスト。
  */
 import { circlesOverlap, dist2, RNG, SpatialHash, xpToNext } from '../js/math.js';
-import { applyUpgrade, describeUpgrade, rollChoices, UPGRADES } from '../js/upgrades.js';
+import { applyUpgrade, describeNova, describeOrbit, describeUpgrade, rollChoices, UPGRADES } from '../js/upgrades.js';
 import { CONFIG } from '../js/config.js';
 import { World } from '../js/world.js';
 
@@ -197,6 +197,72 @@ for (let i = 0; i < 60 * 60; i += 1) {
   }
 }
 assert('one-minute crowd', dens.kills + dens.enemyCount >= 90);
+
+const warn = new World(31);
+warn.setView(1280, 720);
+warn.god = true;
+warn.spawnEnemy('spiral', 90, 0);
+warn.spawnEnemy('spreader', 70, 30);
+warn._spawnEBullet(0, 0, 0, 80, 4, '#ff4a2a', 9);
+warn.time = CONFIG.bossTime - CONFIG.bossWarning - 0.05;
+let warnBullets = 0;
+for (let i = 0; i < 3.5 * 60; i += 1) {
+  warn.update(1 / 60, { x: 0, y: 0 });
+  if (warn.bossWarningPlayed && !warn.bossSpawned) {
+    warnBullets = Math.max(warnBullets, warn.eBullets.filter((b) => b.alive).length);
+  }
+}
+assert('warning window started', warn.bossWarningPlayed && !warn.bossSpawned);
+assert('zero enemy bullets during warning', warnBullets === 0);
+
+const lock = new World(32);
+lock.setView(1280, 720);
+lock.god = true;
+lock.time = CONFIG.bossTime;
+lock.update(1 / 60, { x: 0, y: 0 });
+assert('debug-like immediate lock', lock.bossWarningPlayed && (lock.bossSpawned || lock.bossGrace > 0));
+assert('immediate lock has no ebullets', !lock.eBullets.some((b) => b.alive));
+
+const flavorOrbit = describeOrbit(0, 1);
+const flavorNova = describeNova(0, 1);
+assert('orbit flavor has blades and radius', flavorOrbit.includes('本') && flavorOrbit.includes('半径'));
+assert('nova flavor has shots and period', flavorNova.includes('発') && flavorNova.includes('周期'));
+const orbitCard = describeUpgrade(UPGRADES.find((u) => u.id === 'orbit'), {
+  fireInterval: 0.2,
+  bulletDamage: 10,
+  projectileCount: 1,
+  pierce: 0,
+  speed: 255,
+  maxHp: 120,
+  hp: 120,
+  magnet: 280,
+  orbitCount: 0,
+  novaLevel: 0,
+  lifesteal: 0,
+  bulletSpeed: 560,
+  bulletLife: 0.85,
+  regen: 0.7,
+}, {});
+assert('orbit card not just 0→1', orbitCard.deltaText.includes('刃') && orbitCard.deltaText.includes('半径'));
+
+const after2 = new World(5);
+after2.setView(1280, 720);
+const boss2 = after2.spawnEnemy('boss', 80, 0);
+after2._killEnemy(boss2);
+after2._addXp(999);
+assert('aftermath blocks level queue', after2.pendingLevels === 0 && after2.victory);
+for (let i = 0; i < 20; i += 1) after2.update(1 / 60, { x: 0, y: 0 });
+assert('aftermath still no level queue', after2.pendingLevels === 0 && !after2.over);
+
+const bossRun = new World(44);
+bossRun.setView(1280, 720);
+bossRun.god = true;
+bossRun.time = CONFIG.bossTime;
+for (let i = 0; i < 8 * 60; i += 1) {
+  bossRun.update(1 / 60, { x: 0.2, y: 0 });
+}
+assert('boss fight trash capped', bossRun.kindCounts.grunt <= 8);
+assert('few elites in boss', bossRun.kindCounts.spreader <= 2 && bossRun.kindCounts.spiral <= 1);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {

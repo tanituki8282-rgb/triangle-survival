@@ -170,7 +170,7 @@ export class Renderer {
   _orbits(ctx, world) {
     const p = world.stats;
     if (p.orbitCount <= 0) return;
-    const radius = 42 + p.orbitCount * 8;
+    const radius = CONFIG.orbit.radiusBase + p.orbitCount * CONFIG.orbit.radiusStep;
     ctx.fillStyle = '#ffe566';
     ctx.shadowBlur = 0;
     for (let i = 0; i < p.orbitCount; i += 1) {
