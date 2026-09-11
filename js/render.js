@@ -127,7 +127,7 @@ export class Renderer {
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
     ctx.shadowColor = '#7ef9ff';
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#e8ffff';
     ctx.beginPath();
     ctx.moveTo(16, 0);
@@ -164,8 +164,7 @@ export class Renderer {
     if (p.orbitCount <= 0) return;
     const radius = 42 + p.orbitCount * 8;
     ctx.fillStyle = '#ffe566';
-    ctx.shadowColor = '#ffe566';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 0;
     for (let i = 0; i < p.orbitCount; i += 1) {
       const a = p.orbitAngle + (i / p.orbitCount) * Math.PI * 2;
       const x = p.x + Math.cos(a) * radius;
@@ -200,7 +199,7 @@ export class Renderer {
       ctx.rotate(e.kind === 'boss' ? e.angle : e.angle || 0);
       ctx.fillStyle = flash ? '#ffffff' : def.color;
       ctx.shadowColor = def.color;
-      ctx.shadowBlur = e.kind === 'boss' ? 24 : 8;
+      ctx.shadowBlur = e.kind === 'boss' ? 12 : 0;
       if (e.kind === 'grunt') {
         ctx.beginPath();
         ctx.arc(0, 0, e.r, 0, Math.PI * 2);
@@ -285,18 +284,13 @@ export class Renderer {
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = '#ffe566';
     ctx.shadowColor = '#ffe566';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 0;
     for (let i = 0; i < world.pBullets.length; i += 1) {
       const b = world.pBullets[i];
       if (!b.alive) continue;
-      const ang = Math.atan2(b.vy, b.vx);
-      ctx.save();
-      ctx.translate(b.x, b.y);
-      ctx.rotate(ang);
       ctx.beginPath();
-      ctx.ellipse(0, 0, b.r * 2.4, b.r * 0.85, 0, 0, Math.PI * 2);
+      ctx.ellipse(b.x, b.y, b.r * 2.4, b.r * 0.85, Math.atan2(b.vy, b.vx), 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
     ctx.restore();
   }
@@ -331,22 +325,21 @@ export class Renderer {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = '#5dff7a';
-    ctx.shadowColor = '#5dff7a';
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 0;
     for (let i = 0; i < world.gems.length; i += 1) {
       const g = world.gems[i];
       if (!g.alive) continue;
-      ctx.save();
-      ctx.translate(g.x, g.y);
-      ctx.rotate(this.t * 2 + g.x * 0.01);
+      const a = this.t * 2 + g.x * 0.01;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const r = g.r + 1;
       ctx.beginPath();
-      ctx.moveTo(0, -g.r - 1);
-      ctx.lineTo(g.r, 0);
-      ctx.lineTo(0, g.r + 1);
-      ctx.lineTo(-g.r, 0);
+      ctx.moveTo(g.x + -s * r, g.y + c * r);
+      ctx.lineTo(g.x + c * r, g.y + s * r);
+      ctx.lineTo(g.x + s * r, g.y + -c * r);
+      ctx.lineTo(g.x + -c * r, g.y + -s * r);
       ctx.closePath();
       ctx.fill();
-      ctx.restore();
     }
     ctx.restore();
   }
