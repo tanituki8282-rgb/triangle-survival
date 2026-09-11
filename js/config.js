@@ -39,10 +39,12 @@ export const CONFIG = {
     projectileCount: 1,
     pierce: 0,
     magnet: 280,
-    iFrame: 0.72,
-    regen: 0.7,
+    /** 接触の重ねに対する無敵。1分帯の溶けを防ぐ */
+    iFrame: 1.05,
+    regen: 1.1,
     lifesteal: 0,
-    knockback: 90,
+    /** 被弾時に群れから抜け出す距離の係数元 */
+    knockback: 150,
   },
 
   /** 衛星刃・ノヴァの見た目数値。カード文言と同期する */
@@ -74,7 +76,8 @@ export const CONFIG = {
       speed: 86,
       xp: 1,
       color: '#ff5d73',
-      contact: 7,
+      /** 群れ感は数で出し、接触1発は抑える */
+      contact: 4,
       score: 10,
     },
     spreader: {
@@ -114,12 +117,13 @@ export const CONFIG = {
       speed: 70,
       xp: 2,
       color: '#ff8c42',
-      contact: 10,
+      contact: 6,
       score: 24,
-      dashSpeed: 420,
+      dashSpeed: 330,
       windup: 0.38,
       dashTime: 0.28,
-      cooldown: 1.35,
+      /** 突進の再突入を間引き、接触圧を下げる */
+      cooldown: 2.0,
     },
     boss: {
       radius: 52,
@@ -169,7 +173,8 @@ export const KIND_CAPS = {
   spreader: 10,
   spiral: 3,
   tank: 6,
-  dasher: 12,
+  /** 同時突進を抑えて1分帯の接触圧を下げる。群れの見た目は grunt で維持 */
+  dasher: 5,
   boss: 1,
 };
 

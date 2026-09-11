@@ -713,7 +713,7 @@ export class World {
   }
 
   /**
-   * ボス：3段階の読みやすい弾幕と突進。
+   * ボス：3段階の弾幕。段階ごとに弾数と間隔を抑え、避け筋を階段で見せる。
    * @param {object} e
    * @param {number} dt
    */
@@ -739,34 +739,32 @@ export class World {
 
     if (this.bossGrace > 0 || e.stateT > 0) return;
 
+    // 段階ごとに弾数・間隔を抑え、避け筋が階段で読める密度にする
     if (phase === 1) {
-      e.stateT = 0.85;
+      e.stateT = 1.05;
       const base = Math.atan2(dy, dx);
-      for (let k = -2; k <= 2; k += 1) {
-        this._spawnEBullet(e.x, e.y, base + k * 0.16, 175, 5.5, CONFIG.bullets.danger, 11);
+      for (let k = -1; k <= 1; k += 1) {
+        this._spawnEBullet(e.x, e.y, base + k * 0.2, 165, 5.5, CONFIG.bullets.danger, 11);
       }
-      if (this.rng.next() < 0.35) {
-        this._ringBullets(e.x, e.y, 10, e.phase, 130, CONFIG.bullets.dangerHot);
+      if (this.rng.next() < 0.22) {
+        this._ringBullets(e.x, e.y, 8, e.phase, 125, CONFIG.bullets.dangerHot);
       }
     } else if (phase === 2) {
-      e.stateT = 0.11;
-      const arms = 3;
+      e.stateT = 0.2;
+      const arms = 2;
       for (let a = 0; a < arms; a += 1) {
-        const ang = e.phase * 1.7 + (a / arms) * Math.PI * 2;
-        this._spawnEBullet(e.x, e.y, ang, 148, 4.6, CONFIG.bullets.dangerGold, 10);
+        const ang = e.phase * 1.55 + (a / arms) * Math.PI * 2;
+        this._spawnEBullet(e.x, e.y, ang, 140, 4.6, CONFIG.bullets.dangerGold, 10);
       }
-      if (this.rng.next() < 0.08) {
+      if (this.rng.next() < 0.06) {
         const base = Math.atan2(dy, dx);
-        for (let k = -1; k <= 1; k += 1) {
-          this._spawnEBullet(e.x, e.y, base + k * 0.12, 210, 5, CONFIG.bullets.dangerHot, 11);
-        }
+        this._spawnEBullet(e.x, e.y, base, 195, 5.5, CONFIG.bullets.dangerHot, 11);
       }
     } else {
-      e.stateT = 0.7;
-      this._ringBullets(e.x, e.y, 16, e.phase, 155, CONFIG.bullets.danger);
-      this._ringBullets(e.x, e.y, 12, e.phase + 0.2, 120, CONFIG.bullets.dangerGold);
+      e.stateT = 1.15;
+      this._ringBullets(e.x, e.y, 10, e.phase, 148, CONFIG.bullets.danger);
       const base = Math.atan2(dy, dx);
-      this._spawnEBullet(e.x, e.y, base, 230, 8, CONFIG.bullets.dangerHot, 16);
+      this._spawnEBullet(e.x, e.y, base, 210, 8, CONFIG.bullets.dangerHot, 14);
     }
   }
 
@@ -901,8 +899,10 @@ export class World {
     p.iFrame = CONFIG.player.iFrame;
     p.flash = 1;
     const n = norm(p.x - sx, p.y - sy);
-    p.x += n.x * CONFIG.player.knockback * 0.12;
-    p.y += n.y * CONFIG.player.knockback * 0.12;
+    // 接触の群れから押し出し、無敵解除直後の再重ねを減らす
+    const push = CONFIG.player.knockback * 0.5;
+    p.x += n.x * push;
+    p.y += n.y * push;
     this.shake = Math.max(this.shake, 7);
     this.emit('hurt');
     this._burst(p.x, p.y, '#ff8fab', 10, 140, 0.25);
