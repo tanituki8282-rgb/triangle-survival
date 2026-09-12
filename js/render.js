@@ -332,17 +332,18 @@ export class Renderer {
   _gems(ctx, world) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = '#9dff3a';
-    ctx.strokeStyle = 'rgba(20, 40, 24, 0.85)';
     ctx.lineWidth = 1.5;
     ctx.shadowBlur = 0;
     for (let i = 0; i < world.gems.length; i += 1) {
       const g = world.gems[i];
       if (!g.alive) continue;
+      const vacuum = g.kind === 'vacuum';
       const a = this.t * 2 + g.x * 0.01;
       const c = Math.cos(a);
       const s = Math.sin(a);
-      const r = g.r + 1;
+      const r = g.r + (vacuum ? 3 : 1);
+      ctx.fillStyle = vacuum ? '#7ef9ff' : '#9dff3a';
+      ctx.strokeStyle = vacuum ? 'rgba(20, 50, 64, 0.9)' : 'rgba(20, 40, 24, 0.85)';
       ctx.beginPath();
       ctx.moveTo(g.x + -s * r, g.y + c * r);
       ctx.lineTo(g.x + c * r, g.y + s * r);
@@ -351,6 +352,12 @@ export class Renderer {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      if (vacuum) {
+        ctx.strokeStyle = 'rgba(255, 209, 102, 0.7)';
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, r + 5 + Math.sin(this.t * 6) * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }

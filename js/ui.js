@@ -27,6 +27,7 @@ export class UI {
     this.lvText = document.getElementById('lv-text');
     this.timeText = document.getElementById('time-text');
     this.killText = document.getElementById('kill-text');
+    this.vacuumText = document.getElementById('vacuum-text');
     this.cards = document.getElementById('upgrade-cards');
     this.bossBar = document.getElementById('boss-bar');
     this.bossFill = document.getElementById('boss-fill');
@@ -57,6 +58,13 @@ export class UI {
     this.lvText.textContent = `Lv ${world.level}`;
     this.timeText.textContent = formatTime(world.time);
     this.killText.textContent = `${world.kills}`;
+    if (this.vacuumText) {
+      const full = (p.vacuum || 0) > 0;
+      const timed = (p.vacuumTimer || 0) > 0;
+      this.vacuumText.classList.toggle('hidden', !full && !timed);
+      if (full) this.vacuumText.textContent = 'VACUUM';
+      else if (timed) this.vacuumText.textContent = `VACUUM ${Math.ceil(p.vacuumTimer)}`;
+    }
 
     let boss = null;
     for (let i = 0; i < world.enemies.length; i += 1) {

@@ -81,11 +81,21 @@ export const UPGRADES = [
   {
     id: 'magnet',
     name: '磁力フィールド',
-    desc: '経験値の吸引範囲が広がる',
+    desc: '経験値ジェムの吸引半径が少し広がる。マップ全域には届かない',
     glyph: '◎',
     max: 5,
     apply(stats) {
-      stats.magnet += 90;
+      stats.magnet += 36;
+    },
+  },
+  {
+    id: 'vacuum',
+    name: '真空吸引',
+    desc: '経験値をマップ全域から引き寄せる。レアな回路',
+    glyph: '⊙',
+    max: 1,
+    apply(stats) {
+      stats.vacuum = 1;
     },
   },
   {
@@ -158,6 +168,8 @@ export function rollChoices(ranks, rng, count = 3, level = 1) {
   while (out.length < Math.min(count, pool.length) && remaining.length > 0) {
     const weights = remaining.map((u) => {
       if (level <= 6 && (u.id === 'orbit' || u.id === 'nova')) return 5;
+      // 真空吸引は特別枠。序盤はほぼ出ず、中盤以降も稀
+      if (u.id === 'vacuum') return level < 4 ? 0.18 : 0.42;
       return 1;
     });
     const total = weights.reduce((a, b) => a + b, 0);
@@ -189,6 +201,7 @@ function cloneStats(stats) {
     maxHp: stats.maxHp,
     hp: stats.hp,
     magnet: stats.magnet,
+    vacuum: stats.vacuum || 0,
     orbitCount: stats.orbitCount,
     novaLevel: stats.novaLevel,
     lifesteal: stats.lifesteal,
@@ -211,6 +224,7 @@ export function formatStat(key, v) {
   if (key === 'speed') return `${Math.round(v)}`;
   if (key === 'maxHp') return `${Math.round(v)}`;
   if (key === 'magnet') return `${Math.round(v)}`;
+  if (key === 'vacuum') return v > 0 ? 'ON' : 'OFF';
   if (key === 'orbitCount') return `${v | 0}`;
   if (key === 'novaLevel') return `${v | 0}`;
   if (key === 'lifesteal') return `${Math.round(v * 100)}%`;
@@ -227,6 +241,7 @@ const DIFF_KEYS = [
   'speed',
   'maxHp',
   'magnet',
+  'vacuum',
   'orbitCount',
   'novaLevel',
   'lifesteal',

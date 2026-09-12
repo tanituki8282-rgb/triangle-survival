@@ -118,6 +118,13 @@ body {
   color: var(--gold);
 }
 
+#vacuum-text {
+  margin-top: 8px;
+  color: var(--accent);
+  letter-spacing: 0.18em;
+  font-size: 12px;
+}
+
 #boss-bar {
   position: absolute;
   left: 18%;

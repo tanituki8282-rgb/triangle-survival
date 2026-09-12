@@ -51,6 +51,7 @@ const stats = {
   maxHp: 100,
   hp: 80,
   magnet: 96,
+  vacuum: 0,
   orbitCount: 0,
   novaLevel: 0,
   lifesteal: 0,
@@ -63,7 +64,7 @@ applyUpgrade(stats, power, ranks);
 assert('power raises damage', stats.bulletDamage > 10);
 assert('rank recorded', ranks.power === 1);
 
-const choices = rollChoices({ rapid: 6, power: 6, spread: 5, pierce: 4, mobility: 5, armor: 6, magnet: 5, orbit: 4, nova: 4, vamp: 3, velocity: 4, regen: 4 }, new RNG(3), 3);
+const choices = rollChoices({ rapid: 6, power: 6, spread: 5, pierce: 4, mobility: 5, armor: 6, magnet: 5, vacuum: 1, orbit: 4, nova: 4, vamp: 3, velocity: 4, regen: 4 }, new RNG(3), 3);
 assert('empty when maxed', choices.length === 0);
 
 const world = new World(42);
@@ -109,7 +110,37 @@ vac._killEnemy(farGrunt);
 for (let i = 0; i < 90; i += 1) {
   vac.update(1 / 60, { x: 0, y: 0 });
 }
-assert('vacuum collects distant gem xp', vac.xp > 0 || vac.level > 1 || vac.pendingLevels > 0);
+assert('default does not vacuum distant gems', vac.gems.some((g) => g.alive && g.kind !== 'vacuum'));
+assert('distant gem not auto collected', vac.xp === 0 && vac.level === 1 && vac.pendingLevels === 0);
+
+const vacOn = new World(5);
+vacOn.setView(1280, 720);
+vacOn.stats.vacuum = 1;
+vacOn.spawnEnemy('grunt', 220, 40);
+vacOn._killEnemy(vacOn.enemies.find((e) => e.alive));
+for (let i = 0; i < 90; i += 1) {
+  vacOn.update(1 / 60, { x: 0, y: 0 });
+}
+assert('vacuum upgrade collects distant gems', vacOn.xp > 0 || vacOn.level > 1 || vacOn.pendingLevels > 0);
+
+const aged = new World(9);
+aged.setView(1280, 720);
+aged._spawnGem(420, 0, 3, 'xp');
+const agedGem = aged.gems.find((g) => g.alive);
+agedGem.age = 30;
+for (let i = 0; i < 45; i += 1) {
+  aged.update(1 / 60, { x: 0, y: 0 });
+}
+const stillAged = aged.gems.find((g) => g.alive && g.kind === 'xp');
+assert('aged gems stay put without vacuum', stillAged && Math.abs(stillAged.x - 420) < 40);
+
+const core = new World(6);
+core.setView(800, 600);
+core._spawnGem(16, 0, 0, 'vacuum');
+for (let i = 0; i < 20; i += 1) {
+  core.update(1 / 60, { x: 0, y: 0 });
+}
+assert('vacuum core grants timed vacuum', core.stats.vacuumTimer > 10);
 
 const smoke = new World(99);
 smoke.setView(1280, 720);
@@ -145,7 +176,8 @@ const info = describeUpgrade(rapid, {
   speed: 255,
   maxHp: 120,
   hp: 120,
-  magnet: 280,
+  magnet: 78,
+  vacuum: 0,
   orbitCount: 0,
   novaLevel: 0,
   lifesteal: 0,
@@ -236,7 +268,8 @@ const orbitCard = describeUpgrade(UPGRADES.find((u) => u.id === 'orbit'), {
   speed: 255,
   maxHp: 120,
   hp: 120,
-  magnet: 280,
+  magnet: 78,
+  vacuum: 0,
   orbitCount: 0,
   novaLevel: 0,
   lifesteal: 0,
@@ -245,6 +278,25 @@ const orbitCard = describeUpgrade(UPGRADES.find((u) => u.id === 'orbit'), {
   regen: 0.7,
 }, {});
 assert('orbit card not just 0→1', orbitCard.deltaText.includes('刃') && orbitCard.deltaText.includes('半径'));
+
+const vacCard = describeUpgrade(UPGRADES.find((u) => u.id === 'vacuum'), {
+  fireInterval: 0.2,
+  bulletDamage: 10,
+  projectileCount: 1,
+  pierce: 0,
+  speed: 255,
+  maxHp: 120,
+  hp: 120,
+  magnet: 78,
+  vacuum: 0,
+  orbitCount: 0,
+  novaLevel: 0,
+  lifesteal: 0,
+  bulletSpeed: 560,
+  bulletLife: 0.85,
+  regen: 0.7,
+}, {});
+assert('vacuum card shows ON', vacCard.deltaText.includes('OFF→ON'));
 
 const after2 = new World(5);
 after2.setView(1280, 720);
@@ -265,9 +317,11 @@ for (let i = 0; i < 8 * 60; i += 1) {
 assert('boss fight trash capped', bossRun.kindCounts.grunt <= 8);
 assert('few elites in boss', bossRun.kindCounts.spreader <= 2 && bossRun.kindCounts.spiral <= 1);
 
-assert('grunt contact eased for 1min band', CONFIG.enemies.grunt.contact <= 4);
-assert('dasher contact and cap eased', CONFIG.enemies.dasher.contact <= 6 && KIND_CAPS.dasher <= 5);
-assert('iframe covers contact pile', CONFIG.player.iFrame >= 1);
+assert('grunt contact hurts on mistake', CONFIG.enemies.grunt.contact >= 6);
+assert('dasher pressure raised', CONFIG.enemies.dasher.contact >= 8 && KIND_CAPS.dasher >= 6);
+assert('iframe shorter than pile-melt patch', CONFIG.player.iFrame <= 0.75 && CONFIG.player.iFrame >= 0.5);
+assert('default magnet is local', CONFIG.player.magnet <= 90);
+assert('no age-based map vacuum', CONFIG.xp.vacuumAge == null);
 
 /**
  * 近くの敵の重心から逃げつつ円を描く。平均的なカイト操作の近似。
@@ -360,6 +414,48 @@ bossBody.stateT = 0;
 p3._updateBoss(bossBody, 1 / 60);
 const p3n = p3.eBullets.filter((b) => b.alive).length;
 assert('phase3 ring is a readable staircase', p3n <= 12 && p3n >= 8);
+
+const quiet = new World(12);
+quiet.setView(800, 600);
+let quietPeak = 0;
+for (let i = 0; i < 6; i += 1) {
+  const gq = quiet.spawnEnemy('grunt', 40 + i * 8, 0);
+  quiet._killEnemy(gq);
+  quietPeak = Math.max(quietPeak, quiet.shake);
+}
+for (let i = 0; i < 20; i += 1) {
+  quiet.update(1 / 60, { x: 0, y: 0 });
+  quietPeak = Math.max(quietPeak, quiet.shake);
+}
+assert('normal kills barely shake', quietPeak < 1);
+
+const spike = new World(13);
+spike.setView(800, 600);
+let spikePeak = 0;
+for (let i = 0; i < 10; i += 1) {
+  const gs = spike.spawnEnemy('grunt', 50, i * 4);
+  spike._killEnemy(gs);
+  spikePeak = Math.max(spikePeak, spike.shake);
+}
+assert('combo spike can shake a little', spikePeak >= CONFIG.camera.shakeMin && spikePeak <= CONFIG.camera.shakeMax);
+
+const bossShake = new World(14);
+bossShake.setView(1280, 720);
+bossShake._spawnBoss();
+assert('boss spawn shakes briefly', bossShake.shake >= CONFIG.camera.shakeMin && bossShake.shake <= CONFIG.camera.shakeMax);
+for (let i = 0; i < 40; i += 1) {
+  bossShake.update(1 / 60, { x: 0, y: 0 });
+}
+assert('boss shake decays quickly', bossShake.shake < 1.5);
+
+const idle = new World(17);
+idle.setView(1280, 720);
+for (let i = 0; i < 28 * 60; i += 1) {
+  idle.update(1 / 60, { x: 0, y: 0 });
+  drainLevelUps(idle);
+  if (idle.over) break;
+}
+assert('standing still is not a free first run', idle.stats.hp < CONFIG.player.maxHp - 5 || idle.over);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {

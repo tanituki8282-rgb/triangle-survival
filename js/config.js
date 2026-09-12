@@ -1,6 +1,6 @@
 /**
  * ゲーム定数とバランス値。
- * 批評家レビューを反映した「数分遊べる」縦スライス用。
+ * 人間プレイテスト（揺れ・ジェム回収・難易度）を反映した縦スライス用。
  */
 
 /** @typedef {'grunt'|'spreader'|'spiral'|'tank'|'dasher'|'boss'} EnemyKind */
@@ -38,13 +38,14 @@ export const CONFIG = {
     bulletLife: 0.85,
     projectileCount: 1,
     pierce: 0,
-    magnet: 280,
-    /** 接触の重ねに対する無敵。1分帯の溶けを防ぐ */
-    iFrame: 1.05,
-    regen: 1.1,
+    /** 近距離だけ吸い寄せる。全域吸引は強化／レアコア限定 */
+    magnet: 78,
+    /** 接触後の無敵。群れから抜けられるが連打は通る */
+    iFrame: 0.68,
+    regen: 0.65,
     lifesteal: 0,
     /** 被弾時に群れから抜け出す距離の係数元 */
-    knockback: 150,
+    knockback: 125,
   },
 
   /** 衛星刃・ノヴァの見た目数値。カード文言と同期する */
@@ -64,8 +65,10 @@ export const CONFIG = {
     base: 6,
     growth: 1.28,
     gemRadius: 8,
-    gemSpeed: 620,
-    vacuumAge: 0.45,
+    gemSpeed: 480,
+    vacuumRadius: 12,
+    /** レアコア取得後の全域吸引秒数 */
+    vacuumPickupTime: 18,
   },
 
   /** @type {Record<EnemyKind, object>} */
@@ -73,33 +76,33 @@ export const CONFIG = {
     grunt: {
       radius: 10,
       hp: 14,
-      speed: 86,
+      speed: 94,
       xp: 1,
       color: '#ff5d73',
-      /** 群れ感は数で出し、接触1発は抑える */
-      contact: 4,
+      /** ミスは痛く、積み重なると溶ける */
+      contact: 6,
       score: 10,
     },
     spreader: {
       radius: 13,
       hp: 26,
-      speed: 62,
+      speed: 66,
       xp: 2,
       color: '#c77dff',
-      contact: 9,
+      contact: 10,
       score: 22,
-      fireInterval: 2.15,
+      fireInterval: 1.85,
       preferredRange: 230,
     },
     spiral: {
       radius: 14,
       hp: 34,
-      speed: 48,
+      speed: 50,
       xp: 3,
       color: '#d65cff',
-      contact: 9,
+      contact: 10,
       score: 30,
-      fireInterval: 0.16,
+      fireInterval: 0.15,
     },
     tank: {
       radius: 20,
@@ -109,21 +112,20 @@ export const CONFIG = {
       color: '#f4a261',
       contact: 16,
       score: 45,
-      fireInterval: 2.6,
+      fireInterval: 2.25,
     },
     dasher: {
       radius: 12,
       hp: 20,
-      speed: 70,
+      speed: 74,
       xp: 2,
       color: '#ff8c42',
-      contact: 6,
+      contact: 8,
       score: 24,
-      dashSpeed: 330,
+      dashSpeed: 350,
       windup: 0.38,
       dashTime: 0.28,
-      /** 突進の再突入を間引き、接触圧を下げる */
-      cooldown: 2.0,
+      cooldown: 1.65,
     },
     boss: {
       radius: 52,
@@ -137,10 +139,10 @@ export const CONFIG = {
   },
 
   bullets: {
-    enemySpeed: 165,
+    enemySpeed: 175,
     enemyRadius: 4.2,
     enemyLife: 3.6,
-    enemyDamage: 9,
+    enemyDamage: 11,
     /** 敵弾は危険色で統一。自機シアンと混ぜない */
     danger: '#ff4a2a',
     dangerHot: '#ff7a32',
@@ -149,32 +151,39 @@ export const CONFIG = {
 
   camera: {
     lerp: 8,
-    shakeDecay: 6,
+    /** 短い減衰。群れ掃討ではほぼ揺れない */
+    shakeDecay: 22,
+    shakeMax: 7,
+    shakeMin: 4,
+    shakeCooldown: 0.7,
+    /** ボス出現／撃破／死亡だけクールを貫通できる */
+    shakeOverride: 6,
+    comboShakeEvery: 10,
   },
 };
 
 /**
  * 経過時間に応じた湧き設定。
  * interval は1体あたり秒、kinds は重み付き抽選。
+ * 60秒帯は batch 2 のまま。batch 3 に戻すと接触溶けしやすい。
  */
 export const WAVES = [
-  { t: 0, interval: 0.72, batch: 1, kinds: ['grunt'] },
-  { t: 12, interval: 0.5, batch: 1, kinds: ['grunt', 'grunt', 'grunt', 'spreader'] },
-  { t: 28, interval: 0.4, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
-  { t: 48, interval: 0.32, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
-  { t: 60, interval: 0.28, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
-  { t: 78, interval: 0.26, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
-  { t: 100, interval: 0.24, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 0, interval: 0.52, batch: 1, kinds: ['grunt'] },
+  { t: 8, interval: 0.4, batch: 1, kinds: ['grunt', 'grunt', 'grunt', 'spreader'] },
+  { t: 20, interval: 0.32, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
+  { t: 36, interval: 0.26, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
+  { t: 52, interval: 0.22, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
+  { t: 70, interval: 0.2, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 90, interval: 0.18, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
 ];
 
 /** 種ごとの同時存在上限。弾幕の可読性を守る */
 export const KIND_CAPS = {
   grunt: 140,
-  spreader: 10,
-  spiral: 3,
+  spreader: 12,
+  spiral: 4,
   tank: 6,
-  /** 同時突進を抑えて1分帯の接触圧を下げる。群れの見た目は grunt で維持 */
-  dasher: 5,
+  dasher: 6,
   boss: 1,
 };
 
