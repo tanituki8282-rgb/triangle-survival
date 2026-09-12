@@ -3,7 +3,7 @@
  * 自機・敵・弾・経験値・ボス・パーティクルを1フレームで更新する。
  */
 
-import { BOSS_KIND_CAPS, CONFIG, KIND_CAPS, WAVES } from './config.js';
+import { BOSS_KIND_CAPS, CONFIG, FAUCET, KIND_CAPS, WAVES } from './config.js';
 import { RNG, SpatialHash, circlesOverlap, dist2, lerp, lerpAngle, norm, xpToNext } from './math.js';
 import { applyUpgrade, rollChoices, describeUpgrade } from './upgrades.js';
 
@@ -122,6 +122,9 @@ export class World {
       stateT: 0,
       flash: 0,
       flinch: 0,
+      telegraph: 0,
+      shotIndex: 0,
+      beat: 0,
     }));
 
     this.pBullets = makePool(CONFIG.maxPlayerBullets, () => ({
@@ -148,6 +151,8 @@ export class World {
       dmg: 8,
       life: 2,
       hue: 0,
+      turn: 0,
+      turnLife: 0,
     }));
 
     this.gems = makePool(CONFIG.maxGems, () => ({
@@ -577,6 +582,9 @@ export class World {
     e.flash = 0;
     e.flinch = 0;
     e.pattern = 0;
+    e.telegraph = 0;
+    e.shotIndex = 0;
+    e.beat = 0;
     this.enemyCount += 1;
     this.kindCounts[kind] += 1;
     return e;
@@ -680,23 +688,11 @@ export class World {
         e.vx = (dx / d) * def.speed * seek;
         e.vy = (dy / d) * def.speed * seek;
         e.vx += -dy / d * 22;
-        e.fireCd -= dt;
-        if (!this._isArenaClearing() && e.fireCd <= 0 && d < 460) {
-          e.fireCd = def.fireInterval;
-          const base = Math.atan2(dy, dx);
-          for (let k = -1; k <= 1; k += 1) {
-            this._spawnEBullet(e.x, e.y, base + k * 0.22, 162, 4.2, CONFIG.bullets.danger, CONFIG.bullets.enemyDamage);
-          }
-        }
+        this._tickFaucet(e, dt, d, def.fireRange || 500, () => this._fireAimer(e));
       } else if (e.kind === 'spiral') {
         e.vx = (dx / d) * def.speed;
         e.vy = (dy / d) * def.speed;
-        e.fireCd -= dt;
-        if (!this._isArenaClearing() && e.fireCd <= 0 && d < 520) {
-          e.fireCd = def.fireInterval;
-          e.phase += 0.42;
-          this._spawnEBullet(e.x, e.y, e.phase, 145, 4, CONFIG.bullets.dangerHot, CONFIG.bullets.enemyDamage - 1);
-        }
+        this._tickFaucet(e, dt, d, def.fireRange || 540, () => this._fireBinder(e));
       } else if (e.kind === 'tank') {
         e.vx = (dx / d) * def.speed;
         e.vy = (dy / d) * def.speed;
@@ -740,7 +736,103 @@ export class World {
   }
 
   /**
-   * ボス：3段階の弾幕。段階ごとに弾数と間隔を抑え、避け筋を階段で見せる。
+   * 蛇口の予兆→発射。死亡時は _silenceFaucet で予兆ごと止める。
+   * @param {object} e
+   * @param {number} dt
+   * @param {number} d
+   * @param {number} range
+   * @param {() => void} fire
+   */
+  _tickFaucet(e, dt, d, range, fire) {
+    if (this._isArenaClearing()) {
+      e.telegraph = 0;
+      return;
+    }
+    e.fireCd -= dt;
+    if (e.telegraph > 0) {
+      e.telegraph -= dt;
+      if (e.telegraph <= 0 && e.alive) fire();
+      return;
+    }
+    if (e.fireCd <= 0 && d < range) {
+      const def = CONFIG.enemies[e.kind];
+      e.fireCd = def.fireInterval;
+      e.telegraph = def.telegraph || 0.18;
+      e.flash = 1;
+    }
+  }
+
+  /**
+   * エイマー：単発狙い。3発に1発は曲がり狙いで立ち位置ずらしを要求する。
+   * @param {object} e
+   */
+  _fireAimer(e) {
+    const p = this.stats;
+    const base = Math.atan2(p.y - e.y, p.x - e.x);
+    e.shotIndex = (e.shotIndex || 0) + 1;
+    if (e.shotIndex % FAUCET.aimerCurveEvery === 0) {
+      this._spawnEBullet(e.x, e.y, base, 152, 4.4, CONFIG.bullets.dangerHot, CONFIG.bullets.enemyDamage, {
+        turn: FAUCET.curveTurn,
+        turnLife: FAUCET.curveLife,
+      });
+      return;
+    }
+    this._spawnEBullet(e.x, e.y, base, 188, 4.2, CONFIG.bullets.danger, CONFIG.bullets.enemyDamage);
+  }
+
+  /**
+   * バインダー：奇数は中央空け n-way（セルフミス）、偶数は斜め十字レーン。
+   * @param {object} e
+   */
+  _fireBinder(e) {
+    const p = this.stats;
+    const base = Math.atan2(p.y - e.y, p.x - e.x);
+    const def = CONFIG.enemies.spiral;
+    e.shotIndex = (e.shotIndex || 0) + 1;
+    if (e.shotIndex % 2 === 1) {
+      this._fireSkipCenter(e.x, e.y, base, def.ways, def.waySpread, 158, 4.1, CONFIG.bullets.danger, CONFIG.bullets.enemyDamage);
+      return;
+    }
+    const lane = base + Math.PI / 4;
+    for (let k = 0; k < 4; k += 1) {
+      this._spawnEBullet(e.x, e.y, lane + k * (Math.PI / 2), 132, 4.3, CONFIG.bullets.dangerGold, CONFIG.bullets.enemyDamage);
+    }
+  }
+
+  /**
+   * 自機方向の中央を空けた n-way。立ち止まりはこの隙間に入れるが、エイマーが罰する。
+   * @param {number} x
+   * @param {number} y
+   * @param {number} base
+   * @param {number} ways
+   * @param {number} spread
+   * @param {number} spd
+   * @param {number} r
+   * @param {string} color
+   * @param {number} dmg
+   */
+  _fireSkipCenter(x, y, base, ways, spread, spd, r, color, dmg) {
+    const half = (ways - 1) / 2;
+    for (let k = 0; k < ways; k += 1) {
+      const slot = k - half;
+      if (slot === 0) continue;
+      this._spawnEBullet(x, y, base + slot * spread, spd, r, color, dmg);
+    }
+  }
+
+  /**
+   * 撃破で蛇口を即閉じる。予兆中の発射も残さない。
+   * @param {object} e
+   */
+  _silenceFaucet(e) {
+    e.telegraph = 0;
+    e.fireCd = 99;
+    e.state = 0;
+    e.stateT = 0;
+  }
+
+  /**
+   * ボス：狙い＋柵＋稀な曲がりを階段で足す。遠距離カイトが空き地にならないようにする。
    * @param {object} e
    * @param {number} dt
    */
@@ -752,6 +844,7 @@ export class World {
     const d = Math.hypot(dx, dy) || 1;
     const hpRatio = e.hp / e.maxHp;
     const phase = hpRatio > 0.66 ? 1 : hpRatio > 0.33 ? 2 : 3;
+    const far = d > FAUCET.bossFarRange;
 
     const pref = 210;
     const seek = d > pref ? 1 : -0.4;
@@ -766,32 +859,59 @@ export class World {
 
     if (this.bossGrace > 0 || e.stateT > 0) return;
 
-    // 段階ごとに弾数・間隔を抑え、避け筋が階段で読める密度にする
+    const base = Math.atan2(dy, dx);
+    e.beat = (e.beat || 0) + 1;
+
     if (phase === 1) {
-      e.stateT = 1.05;
-      const base = Math.atan2(dy, dx);
-      for (let k = -1; k <= 1; k += 1) {
-        this._spawnEBullet(e.x, e.y, base + k * 0.2, 165, 5.5, CONFIG.bullets.danger, 11);
+      e.stateT = far ? 0.82 : 0.98;
+      if (e.beat % 2 === 1) {
+        for (let k = -1; k <= 1; k += 1) {
+          this._spawnEBullet(e.x, e.y, base + k * 0.2, far ? 178 : 165, 5.5, CONFIG.bullets.danger, 11);
+        }
+        if (far) {
+          this._spawnEBullet(e.x, e.y, base, 205, 5.2, CONFIG.bullets.dangerHot, 11);
+        }
+      } else {
+        this._fireSkipCenter(e.x, e.y, base, 5, 0.38, 150, 4.6, CONFIG.bullets.dangerGold, 10);
       }
-      if (this.rng.next() < 0.22) {
+      if (this.rng.next() < 0.16) {
         this._ringBullets(e.x, e.y, 8, e.phase, 125, CONFIG.bullets.dangerHot);
       }
     } else if (phase === 2) {
-      e.stateT = 0.2;
+      e.stateT = far ? 0.2 : 0.22;
       const arms = 2;
       for (let a = 0; a < arms; a += 1) {
         const ang = e.phase * 1.55 + (a / arms) * Math.PI * 2;
         this._spawnEBullet(e.x, e.y, ang, 140, 4.6, CONFIG.bullets.dangerGold, 10);
       }
-      if (this.rng.next() < 0.06) {
-        const base = Math.atan2(dy, dx);
-        this._spawnEBullet(e.x, e.y, base, 195, 5.5, CONFIG.bullets.dangerHot, 11);
+      if (e.beat % 7 === 0) {
+        this._spawnEBullet(e.x, e.y, base, 198, 5.5, CONFIG.bullets.dangerHot, 11);
+      }
+      if (e.beat % 10 === 0) {
+        this._spawnEBullet(e.x, e.y, base, 156, 4.8, CONFIG.bullets.danger, 10, {
+          turn: FAUCET.curveTurn * 0.85,
+          turnLife: 1.15,
+        });
+      }
+      if (far && e.beat % 6 === 0) {
+        this._fireSkipCenter(e.x, e.y, base, 5, 0.4, 148, 4.4, CONFIG.bullets.danger, 10);
       }
     } else {
-      e.stateT = 1.15;
-      this._ringBullets(e.x, e.y, 10, e.phase, 148, CONFIG.bullets.danger);
-      const base = Math.atan2(dy, dx);
-      this._spawnEBullet(e.x, e.y, base, 210, 8, CONFIG.bullets.dangerHot, 14);
+      if (e.beat % 2 === 1) {
+        e.stateT = 1.15;
+        this._ringBullets(e.x, e.y, 10, e.phase, 148, CONFIG.bullets.danger);
+        this._spawnEBullet(e.x, e.y, base, 210, 8, CONFIG.bullets.dangerHot, 14);
+        if (far) {
+          this._spawnEBullet(e.x, e.y, base, 188, 5.4, CONFIG.bullets.danger, 11);
+        }
+      } else {
+        e.stateT = 1.05;
+        this._fireSkipCenter(e.x, e.y, base, 5, 0.36, 160, 4.6, CONFIG.bullets.dangerGold, 10);
+        this._spawnEBullet(e.x, e.y, base, 168, 5.2, CONFIG.bullets.dangerHot, 12, {
+          turn: FAUCET.curveTurn * 0.8,
+          turnLife: 1.2,
+        });
+      }
     }
   }
 
@@ -818,8 +938,9 @@ export class World {
    * @param {number} r
    * @param {string} color
    * @param {number} dmg
+   * @param {{turn?: number, turnLife?: number, life?: number}} [opts]
    */
-  _spawnEBullet(x, y, angle, speed, r, color, dmg) {
+  _spawnEBullet(x, y, angle, speed, r, color, dmg, opts) {
     if (this._isArenaClearing()) return;
     const b = alloc(this.eBullets);
     if (!b) return;
@@ -830,8 +951,10 @@ export class World {
     b.vy = Math.sin(angle) * speed;
     b.r = r;
     b.dmg = dmg;
-    b.life = CONFIG.bullets.enemyLife;
+    b.life = opts && opts.life ? opts.life : CONFIG.bullets.enemyLife;
     b.color = color;
+    b.turn = opts && opts.turn ? opts.turn : 0;
+    b.turnLife = opts && opts.turnLife ? opts.turnLife : 0;
   }
 
   /**
@@ -852,6 +975,7 @@ export class World {
     for (let i = 0; i < this.eBullets.length; i += 1) {
       const b = this.eBullets[i];
       if (!b.alive) continue;
+      this._steerEnemyBullet(b, dt);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
@@ -859,6 +983,28 @@ export class World {
         b.alive = false;
       }
     }
+  }
+
+  /**
+   * 曲がり狙い弾を読める曲率で自機へ寄せる。死亡した蛇口からはもう出ない。
+   * @param {object} b
+   * @param {number} dt
+   */
+  _steerEnemyBullet(b, dt) {
+    if (!(b.turn > 0) || !(b.turnLife > 0)) return;
+    b.turnLife -= dt;
+    const desired = Math.atan2(this.stats.y - b.y, this.stats.x - b.x);
+    const current = Math.atan2(b.vy, b.vx);
+    let delta = desired - current;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    const maxStep = b.turn * dt;
+    if (delta > maxStep) delta = maxStep;
+    if (delta < -maxStep) delta = -maxStep;
+    const ang = current + delta;
+    const spd = Math.hypot(b.vx, b.vy);
+    b.vx = Math.cos(ang) * spd;
+    b.vy = Math.sin(ang) * spd;
   }
 
   _collide() {
@@ -963,6 +1109,7 @@ export class World {
    */
   _killEnemy(e) {
     if (!e.alive) return;
+    this._silenceFaucet(e);
     e.alive = false;
     this.enemyCount = Math.max(0, this.enemyCount - 1);
     this.kindCounts[e.kind] = Math.max(0, this.kindCounts[e.kind] - 1);

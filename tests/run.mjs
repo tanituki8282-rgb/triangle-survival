@@ -3,7 +3,7 @@
  */
 import { circlesOverlap, dist2, RNG, SpatialHash, xpToNext } from '../js/math.js';
 import { applyUpgrade, describeNova, describeOrbit, describeUpgrade, rollChoices, UPGRADES } from '../js/upgrades.js';
-import { CONFIG, KIND_CAPS } from '../js/config.js';
+import { CONFIG, FAUCET, KIND_CAPS } from '../js/config.js';
 import { World } from '../js/world.js';
 
 let failed = 0;
@@ -456,6 +456,112 @@ for (let i = 0; i < 28 * 60; i += 1) {
   if (idle.over) break;
 }
 assert('standing still is not a free first run', idle.stats.hp < CONFIG.player.maxHp - 5 || idle.over);
+
+assert('aimer faucet not a crowd', KIND_CAPS.spreader <= 8);
+assert('binder faucet capped', KIND_CAPS.spiral <= 4);
+assert('faucet curve is readable', FAUCET.curveTurn > 0.5 && FAUCET.curveTurn < 2.5);
+
+const aimW = new World(10);
+aimW.setView(1280, 720);
+aimW.spawnCd = 9999;
+aimW.stats.x = 0;
+aimW.stats.y = 0;
+const aimer = aimW.spawnEnemy('spreader', 240, 0);
+aimer.shotIndex = 0;
+aimW._fireAimer(aimer);
+const aimed = aimW.eBullets.find((b) => b.alive);
+assert('aimer fires toward player', Boolean(aimed) && aimed.vx < -100 && Math.abs(aimed.vy) < 30);
+
+const stopW = new World(10);
+stopW.setView(1280, 720);
+stopW.god = true;
+stopW.spawnCd = 9999;
+stopW.stats.x = 0;
+stopW.stats.y = 80;
+stopW.stats.iFrame = 99;
+stopW.stats.fireCd = 99;
+stopW.stats.fireInterval = 99;
+const liveAimer = stopW.spawnEnemy('spreader', 220, 0);
+liveAimer.fireCd = 0;
+liveAimer.telegraph = 0.01;
+for (let i = 0; i < 80; i += 1) {
+  stopW.update(1 / 60, { x: 0, y: 0 });
+}
+const aimerPressure = stopW.eBullets.filter((b) => b.alive).length;
+assert('leaving aimer alive builds aimed pressure', aimerPressure >= 1);
+stopW._killEnemy(liveAimer);
+assert('kill cancels aimer telegraph', liveAimer.telegraph === 0 && !liveAimer.alive);
+const afterKill = stopW.eBullets.filter((b) => b.alive).length;
+for (let i = 0; i < 90; i += 1) {
+  stopW.update(1 / 60, { x: 0, y: 0 });
+}
+const leftover = stopW.eBullets.filter((b) => b.alive).length;
+assert('dead aimer adds no new bullets', leftover <= afterKill);
+
+const bindW = new World(12);
+bindW.setView(1280, 720);
+bindW.stats.x = 0;
+bindW.stats.y = 0;
+const binder = bindW.spawnEnemy('spiral', 220, 0);
+binder.shotIndex = 0;
+bindW._fireBinder(binder);
+const lanes = bindW.eBullets.filter((b) => b.alive);
+assert('binder skip-center volley', lanes.length >= 3 && lanes.length <= 5);
+const aimedAtIdle = lanes.some((b) => b.vx < 0 && Math.abs(b.vy) < 10);
+assert('binder leaves a stand-still gap', !aimedAtIdle);
+bindW._fireBinder(binder);
+const fenced = bindW.eBullets.filter((b) => b.alive).length;
+assert('binder then fences panic strafe', fenced >= lanes.length + 3);
+
+const tel = new World(11);
+tel.setView(800, 600);
+const te = tel.spawnEnemy('spiral', 160, 0);
+te.telegraph = 0.25;
+te.fireCd = 1;
+te.state = 1;
+tel._killEnemy(te);
+assert('kill silences pending telegraph', te.telegraph === 0 && te.state === 0 && !te.alive);
+
+const cw = new World(13);
+cw.setView(1280, 720);
+cw.stats.x = 0;
+cw.stats.y = 0;
+cw._spawnEBullet(200, 0, -Math.PI / 2, 120, 4, '#ff7a32', 10, { turn: 2.2, turnLife: 2 });
+const cb = cw.eBullets.find((b) => b.alive);
+const vx0 = cb.vx;
+for (let i = 0; i < 30; i += 1) {
+  cw._updateBullets(1 / 60);
+}
+assert('curve steers toward player', cb.alive && cb.vx < vx0 - 10);
+
+const farB = new World(15);
+farB.setView(1280, 720);
+farB.god = true;
+farB.bossGrace = 0;
+const farBody = farB.spawnEnemy('boss', 0, -420);
+farBody.stateT = 0;
+farBody.hp = farBody.maxHp * 0.9;
+let farPeak = 0;
+for (let i = 0; i < 5 * 60; i += 1) {
+  farB._updateBoss(farBody, 1 / 60);
+  farPeak = Math.max(farPeak, farB.eBullets.filter((b) => b.alive).length);
+}
+assert('boss far range still presses', farPeak >= 6);
+assert('boss far stays readable', farPeak <= 48);
+
+const midB = new World(16);
+midB.setView(1280, 720);
+midB.god = true;
+midB.bossGrace = 0;
+const midBody = midB.spawnEnemy('boss', 0, -220);
+midBody.stateT = 0;
+midBody.hp = midBody.maxHp * 0.5;
+let midPeak = 0;
+for (let i = 0; i < 4 * 60; i += 1) {
+  midB._updateBoss(midBody, 1 / 60);
+  midPeak = Math.max(midPeak, midB.eBullets.filter((b) => b.alive).length);
+}
+assert('boss mid range not a cave wall', midPeak <= 56 && midPeak >= 4);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {

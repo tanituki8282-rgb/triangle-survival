@@ -273,6 +273,10 @@ export class Renderer {
       }
       ctx.restore();
 
+      if (e.telegraph > 0 && (e.kind === 'spreader' || e.kind === 'spiral')) {
+        this._faucetTelegraph(ctx, world, e);
+      }
+
       if (e.kind === 'boss' || e.maxHp >= 80) {
         const bw = e.kind === 'boss' ? 86 : 28;
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -281,6 +285,42 @@ export class Renderer {
         ctx.fillRect(e.x - bw / 2, e.y - e.r - 10, bw * (e.hp / e.maxHp), 4);
       }
     }
+  }
+
+  /**
+   * 蛇口の予兆線。撃破で消えるので「倒す＝その扇が静かになる」が見える。
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {import('./world.js').World} world
+   * @param {object} e
+   */
+  _faucetTelegraph(ctx, world, e) {
+    const p = world.stats;
+    const base = Math.atan2(p.y - e.y, p.x - e.x);
+    const pulse = 0.4 + Math.sin(this.t * 16) * 0.2;
+    ctx.save();
+    ctx.globalAlpha = 0.4 + pulse * 0.35;
+    ctx.strokeStyle = CONFIG.bullets.dangerHot;
+    ctx.lineWidth = 1.6;
+    if (e.kind === 'spreader') {
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(e.x + Math.cos(base) * 56, e.y + Math.sin(base) * 56);
+      ctx.stroke();
+    } else {
+      const spread = CONFIG.enemies.spiral.waySpread;
+      const ways = CONFIG.enemies.spiral.ways;
+      const half = (ways - 1) / 2;
+      for (let k = 0; k < ways; k += 1) {
+        const slot = k - half;
+        if (slot === 0) continue;
+        const a = base + slot * spread;
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y);
+        ctx.lineTo(e.x + Math.cos(a) * 48, e.y + Math.sin(a) * 48);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   /**
