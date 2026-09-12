@@ -1,9 +1,10 @@
 /**
  * ゲーム定数とバランス値。
- * 人間プレイテスト（揺れ・ジェム回収・難易度）を反映した縦スライス用。
+ * 蛇口実験（エイマー／バインダー）と人間プレイテストを反映した縦スライス用。
  */
 
 /** @typedef {'grunt'|'spreader'|'spiral'|'tank'|'dasher'|'boss'} EnemyKind */
+/** spreader = エイマー蛇口。spiral = レーン／バインダー蛇口。 */
 
 export const CONFIG = {
   /** 仮想ピクセル。内部シミュレーションはこの単位 */
@@ -83,26 +84,34 @@ export const CONFIG = {
       contact: 6,
       score: 10,
     },
+    /** エイマー蛇口。狙い弾で立ち止まりを罰し、倒すとその扇の圧が落ちる */
     spreader: {
       radius: 13,
       hp: 26,
-      speed: 66,
+      speed: 62,
       xp: 2,
       color: '#c77dff',
       contact: 10,
       score: 22,
-      fireInterval: 1.85,
-      preferredRange: 230,
+      fireInterval: 0.98,
+      preferredRange: 250,
+      fireRange: 500,
+      telegraph: 0.2,
     },
+    /** バインダー蛇口。セルフミス n-way と固定レーンで移動を柵する */
     spiral: {
       radius: 14,
-      hp: 34,
-      speed: 50,
+      hp: 30,
+      speed: 48,
       xp: 3,
       color: '#d65cff',
       contact: 10,
       score: 30,
-      fireInterval: 0.15,
+      fireInterval: 1.48,
+      fireRange: 540,
+      telegraph: 0.28,
+      ways: 5,
+      waySpread: 0.4,
     },
     tank: {
       radius: 20,
@@ -141,7 +150,7 @@ export const CONFIG = {
   bullets: {
     enemySpeed: 175,
     enemyRadius: 4.2,
-    enemyLife: 3.6,
+    enemyLife: 3.8,
     enemyDamage: 11,
     /** 敵弾は危険色で統一。自機シアンと混ぜない */
     danger: '#ff4a2a',
@@ -163,24 +172,34 @@ export const CONFIG = {
 };
 
 /**
+ * 曲がり狙い弾。Cave 量ではなく、読める曲率で立ち位置をずらす。
+ */
+export const FAUCET = {
+  aimerCurveEvery: 3,
+  curveTurn: 1.35,
+  curveLife: 1.05,
+  bossFarRange: 210,
+};
+
+/**
  * 経過時間に応じた湧き設定。
  * interval は1体あたり秒、kinds は重み付き抽選。
- * 60秒帯は batch 2 のまま。batch 3 に戻すと接触溶けしやすい。
+ * 頭数は増やさず、一部を蛇口種へ差し替える。60秒帯は batch 2 のまま。
  */
 export const WAVES = [
   { t: 0, interval: 0.52, batch: 1, kinds: ['grunt'] },
-  { t: 8, interval: 0.4, batch: 1, kinds: ['grunt', 'grunt', 'grunt', 'spreader'] },
-  { t: 20, interval: 0.32, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
-  { t: 36, interval: 0.26, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher'] },
-  { t: 52, interval: 0.22, batch: 2, kinds: ['grunt', 'grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
-  { t: 70, interval: 0.2, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
-  { t: 90, interval: 0.18, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 8, interval: 0.4, batch: 1, kinds: ['grunt', 'grunt', 'spreader'] },
+  { t: 20, interval: 0.32, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher'] },
+  { t: 36, interval: 0.26, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
+  { t: 52, interval: 0.22, batch: 2, kinds: ['grunt', 'grunt', 'spreader', 'dasher', 'spiral'] },
+  { t: 70, interval: 0.2, batch: 2, kinds: ['grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
+  { t: 90, interval: 0.18, batch: 2, kinds: ['grunt', 'spreader', 'dasher', 'spiral', 'tank'] },
 ];
 
-/** 種ごとの同時存在上限。弾幕の可読性を守る */
+/** 種ごとの同時存在上限。蛇口は質優先で同時数を抑える */
 export const KIND_CAPS = {
   grunt: 140,
-  spreader: 12,
+  spreader: 7,
   spiral: 4,
   tank: 6,
   dasher: 6,
