@@ -5,6 +5,36 @@
 
 依存ゼロの静的サイト（`index.html` + ES modules + Canvas 2D + Web Audio）。
 
+
+## ローカルで遊ぶ（他人に配るとき）
+
+ブラウザゲームなので、**インターネットなしでも**フォルダを渡せば遊べます。  
+ただし `index.html` をダブルクリック（`file://`）では動きません（ES modules のため）。小さなローカルサーバーが必要です。
+
+### Windows（かんたん）
+1. このリポジトリを zip で落とす／Release の zip を展開する
+2. `start.bat` をダブルクリック
+3. ブラウザが `http://localhost:8080/` を開く
+4. 止めるときは黒い窓で Ctrl+C
+
+Python 3 が入っている必要があります（[python.org](https://www.python.org/downloads/)）。入っていれば追加インストール不要です。
+
+### macOS / Linux
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+### 手動
+```bash
+python3 -m http.server 8080
+```
+→ http://localhost:8080/
+
+### オンライン
+https://tanituki8282-rgb.github.io/triangle-survival/
+
+
 ## Play
 
 GitHub Pages（リポジトリ Settings → Pages で GitHub Actions、または `main` のルートを公開）:
