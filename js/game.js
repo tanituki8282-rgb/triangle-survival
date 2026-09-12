@@ -243,6 +243,7 @@ export class Game {
       else if (name === 'bossKill') this.audio.explosion(true);
       else if (name === 'hurt') this.audio.hurt();
       else if (name === 'gem') this.audio.gem();
+      else if (name === 'vacuum') this.audio.gem();
       else if (name === 'warning') this.audio.warning();
       else if (name === 'boss') this.audio.warning();
       else if (name === 'death') this.audio.death();

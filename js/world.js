@@ -61,6 +61,7 @@ export class World {
     this.aftermath = 0;
     this.fade = 0;
     this.shake = 0;
+    this.shakeCd = 0;
     this.hitstop = 0;
     this.killFlash = 0;
     /** @type {string[]} */
@@ -86,6 +87,8 @@ export class World {
       projectileCount: CONFIG.player.projectileCount,
       pierce: CONFIG.player.pierce,
       magnet: CONFIG.player.magnet,
+      vacuum: 0,
+      vacuumTimer: 0,
       iFrame: 0,
       regen: CONFIG.player.regen,
       lifesteal: CONFIG.player.lifesteal,
@@ -156,6 +159,8 @@ export class World {
       value: 1,
       r: CONFIG.xp.gemRadius,
       age: 0,
+      /** @type {'xp'|'vacuum'} */
+      kind: 'xp',
     }));
 
     this.particles = makePool(CONFIG.maxParticles, () => ({
@@ -228,6 +233,8 @@ export class World {
     if (this.comboTimer <= 0) this.combo = 0;
     this.killFlash = Math.max(0, this.killFlash - dt * 3);
     this.shake = Math.max(0, this.shake - dt * CONFIG.camera.shakeDecay);
+    this.shakeCd = Math.max(0, this.shakeCd - dt);
+    this.stats.vacuumTimer = Math.max(0, (this.stats.vacuumTimer || 0) - dt);
     this.stats.iFrame = Math.max(0, this.stats.iFrame - dt);
     this.stats.flash = Math.max(0, (this.stats.flash || 0) - dt);
 
@@ -252,8 +259,28 @@ export class World {
       this.victory = false;
       this.emit('death');
       this._burst(this.stats.x, this.stats.y, '#7ef9ff', 36, 280, 0.45);
-      this.shake = Math.max(this.shake, 18);
+      this._addShake(6.5);
     }
+  }
+
+  /**
+   * 大きな演出だけ短いシェイクを入れる。群れ掃討ではほぼ揺らさない。
+   * @param {number} amount
+   */
+  _addShake(amount) {
+    const cam = CONFIG.camera;
+    if (amount < cam.shakeMin) return;
+    if (this.shakeCd > 0 && amount < cam.shakeOverride) return;
+    this.shake = Math.min(cam.shakeMax, Math.max(this.shake, amount));
+    this.shakeCd = cam.shakeCooldown;
+  }
+
+  /**
+   * 真空吸引の強化、またはレアコアの時限効果。
+   * @returns {boolean}
+   */
+  _hasFullVacuum() {
+    return (this.stats.vacuum || 0) > 0 || (this.stats.vacuumTimer || 0) > 0;
   }
 
   /**
@@ -573,7 +600,7 @@ export class World {
       b.stateT = CONFIG.bossGrace;
     }
     this.emit('boss');
-    this.shake = 12;
+    this._addShake(6.5);
     this._ring(p.x, p.y, '#ffd166', 48);
   }
 
@@ -658,7 +685,7 @@ export class World {
           e.fireCd = def.fireInterval;
           const base = Math.atan2(dy, dx);
           for (let k = -1; k <= 1; k += 1) {
-            this._spawnEBullet(e.x, e.y, base + k * 0.22, 150, 4.2, CONFIG.bullets.danger, 9);
+            this._spawnEBullet(e.x, e.y, base + k * 0.22, 162, 4.2, CONFIG.bullets.danger, CONFIG.bullets.enemyDamage);
           }
         }
       } else if (e.kind === 'spiral') {
@@ -668,7 +695,7 @@ export class World {
         if (!this._isArenaClearing() && e.fireCd <= 0 && d < 520) {
           e.fireCd = def.fireInterval;
           e.phase += 0.42;
-          this._spawnEBullet(e.x, e.y, e.phase, 135, 4, CONFIG.bullets.dangerHot, 8);
+          this._spawnEBullet(e.x, e.y, e.phase, 145, 4, CONFIG.bullets.dangerHot, CONFIG.bullets.enemyDamage - 1);
         }
       } else if (e.kind === 'tank') {
         e.vx = (dx / d) * def.speed;
@@ -676,7 +703,7 @@ export class World {
         e.fireCd -= dt;
         if (!this._isArenaClearing() && e.fireCd <= 0 && d < 500) {
           e.fireCd = def.fireInterval;
-          this._spawnEBullet(e.x, e.y, Math.atan2(dy, dx), 120, 7.5, CONFIG.bullets.dangerGold, 14);
+          this._spawnEBullet(e.x, e.y, Math.atan2(dy, dx), 128, 7.5, CONFIG.bullets.dangerGold, CONFIG.bullets.enemyDamage + 4);
         }
       } else if (e.kind === 'dasher') {
         e.stateT -= dt;
@@ -903,7 +930,6 @@ export class World {
     const push = CONFIG.player.knockback * 0.5;
     p.x += n.x * push;
     p.y += n.y * push;
-    this.shake = Math.max(this.shake, 7);
     this.emit('hurt');
     this._burst(p.x, p.y, '#ff8fab', 10, 140, 0.25);
   }
@@ -946,8 +972,15 @@ export class World {
     this.comboTimer = 1.6;
     this.score += def.score + this.combo * 2;
     this.killFlash = Math.min(1, this.killFlash + 0.12);
-    const comboShake = Math.min(11, 2 + this.combo * 0.45);
-    this.shake = Math.max(this.shake, e.kind === 'boss' ? 20 : comboShake);
+    // 通常キルでは揺らさない。連キルの節目とボスだけ短く叩く
+    if (e.kind === 'boss') {
+      this._addShake(7);
+    } else {
+      const every = CONFIG.camera.comboShakeEvery;
+      if (this.combo >= every && this.combo % every === 0) {
+        this._addShake(4.5);
+      }
+    }
 
     const gemN = e.kind === 'boss' ? 12 : e.kind === 'tank' ? 3 : 1;
     for (let i = 0; i < gemN; i += 1) {
@@ -957,6 +990,7 @@ export class World {
         e.kind === 'boss' ? 8 : def.xp,
       );
     }
+    this._maybeDropVacuum(e);
     this._burst(e.x, e.y, def.color, e.kind === 'boss' ? 48 : 12 + e.r * 0.4, 90 + e.r * 4, 0.28);
     this._ring(e.x, e.y, def.color, e.r + 8);
     this.emit(e.kind === 'boss' ? 'bossKill' : 'explode');
@@ -976,14 +1010,35 @@ export class World {
   }
 
   /**
+   * タンク／ボスなどから稀に真空コアを落とす。
+   * @param {object} e
+   */
+  _maybeDropVacuum(e) {
+    if (e.kind === 'boss') {
+      this._spawnGem(e.x, e.y - 18, 0, 'vacuum');
+      return;
+    }
+    const chance = e.kind === 'tank' ? 0.16 : e.kind === 'spiral' ? 0.07 : 0;
+    if (chance > 0 && this.rng.next() < chance) {
+      this._spawnGem(e.x + 10, e.y - 10, 0, 'vacuum');
+    }
+  }
+
+  /**
    * @param {number} x
    * @param {number} y
    * @param {number} value
+   * @param {'xp'|'vacuum'} [kind]
    */
-  _spawnGem(x, y, value) {
+  _spawnGem(x, y, value, kind = 'xp') {
     const g = alloc(this.gems);
     if (!g) {
-      this._addXp(value);
+      if (kind === 'vacuum') {
+        this.stats.vacuumTimer = Math.max(this.stats.vacuumTimer || 0, CONFIG.xp.vacuumPickupTime);
+        this.emit('vacuum');
+      } else {
+        this._addXp(value);
+      }
       return;
     }
     g.alive = true;
@@ -992,26 +1047,24 @@ export class World {
     g.vx = this.rng.range(-40, 40);
     g.vy = this.rng.range(-40, 40);
     g.value = value;
-    g.r = CONFIG.xp.gemRadius;
+    g.kind = kind;
+    g.r = kind === 'vacuum' ? CONFIG.xp.vacuumRadius : CONFIG.xp.gemRadius;
     g.age = 0;
   }
 
   /**
+   * 既定は近距離マグネットのみ。時間経過の全域回収はしない。
    * @param {number} dt
    */
   _updateGems(dt) {
     const p = this.stats;
-    const pick2 = 30 * 30;
-    const viewR = Math.hypot(this._viewW, this._viewH) * 0.55;
+    const magnetR = this._hasFullVacuum() ? 4000 : p.magnet;
     for (let i = 0; i < this.gems.length; i += 1) {
       const g = this.gems[i];
       if (!g.alive) continue;
       g.age += dt;
-      const d2 = dist2(g.x, g.y, p.x, p.y);
-      const dist = Math.sqrt(d2);
-      // 画面内は常に吸引。少し経ったジェムは画面外からも回収する
-      const vacuum = dist < Math.max(p.magnet, viewR) || g.age >= CONFIG.xp.vacuumAge;
-      if (vacuum && dist > 0.001) {
+      const dist = Math.sqrt(dist2(g.x, g.y, p.x, p.y));
+      if (dist < magnetR && dist > 0.001) {
         const n = norm(p.x - g.x, p.y - g.y);
         const pull = CONFIG.xp.gemSpeed * (0.7 + Math.min(1.4, dist / 160));
         g.vx = n.x * pull;
@@ -1022,10 +1075,16 @@ export class World {
       }
       g.x += g.vx * dt;
       g.y += g.vy * dt;
-      if (dist2(g.x, g.y, p.x, p.y) < pick2) {
+      const pick = g.kind === 'vacuum' ? 36 : 30;
+      if (dist2(g.x, g.y, p.x, p.y) < pick * pick) {
         g.alive = false;
-        this._addXp(g.value);
-        this.emit('gem');
+        if (g.kind === 'vacuum') {
+          p.vacuumTimer = Math.max(p.vacuumTimer || 0, CONFIG.xp.vacuumPickupTime);
+          this.emit('vacuum');
+        } else {
+          this._addXp(g.value);
+          this.emit('gem');
+        }
       }
     }
   }
