@@ -178,7 +178,7 @@ export const FAUCET = {
   aimerCurveEvery: 3,
   curveTurn: 1.35,
   curveLife: 1.05,
-  bossFarRange: 300,
+  bossFarRange: 210,
 };
 
 /**

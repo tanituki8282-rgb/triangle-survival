@@ -585,6 +585,8 @@ export class World {
     e.telegraph = 0;
     e.shotIndex = 0;
     e.beat = 0;
+    e.farCd = 0.4;
+    e.farShot = 0;
     this.enemyCount += 1;
     this.kindCounts[kind] += 1;
     return e;
@@ -832,6 +834,34 @@ export class World {
   }
 
   /**
+   * 中〜遠距離の細い供給。近いほど本体ボレーだけで、離れるほど合間を埋める。
+   * @param {object} e
+   * @param {number} dt
+   * @param {number} d
+   * @param {boolean} far
+   * @param {number} base
+   */
+  _tickBossRangePressure(e, dt, d, far, base) {
+    if (!far || this.bossGrace > 0 || this._isArenaClearing()) return;
+    const t = Math.max(0, Math.min(1, (d - FAUCET.bossFarRange) / 260));
+    const interval = 0.78 - t * 0.34;
+    e.farCd = (e.farCd == null ? 0.4 : e.farCd) - dt;
+    if (e.farCd > 0) return;
+    e.farCd = interval;
+    e.farShot = (e.farShot || 0) + 1;
+    this._spawnEBullet(e.x, e.y, base, 186 + t * 24, 5.1, CONFIG.bullets.dangerHot, 11);
+    if (e.farShot % 2 === 0) {
+      this._fireSkipCenter(e.x, e.y, base, 5, 0.4, 124, 4.2, CONFIG.bullets.dangerGold, 10);
+    }
+    if (e.farShot % 4 === 0) {
+      this._spawnEBullet(e.x, e.y, base, 148, 4.7, CONFIG.bullets.danger, 10, {
+        turn: FAUCET.curveTurn * 0.75,
+        turnLife: 1.25,
+      });
+    }
+  }
+
+  /**
    * ボス：狙い＋柵＋稀な曲がりを階段で足す。遠距離カイトが空き地にならないようにする。
    * @param {object} e
    * @param {number} dt
@@ -857,9 +887,12 @@ export class World {
     e.stateT -= dt;
     e.pattern = phase;
 
+    const base = Math.atan2(dy, dx);
+    // 距離が開くほど合間に狙い／柵を足し、カイト空き地を潰す
+    this._tickBossRangePressure(e, dt, d, far, base);
+
     if (this.bossGrace > 0 || e.stateT > 0) return;
 
-    const base = Math.atan2(dy, dx);
     e.beat = (e.beat || 0) + 1;
 
     if (phase === 1) {

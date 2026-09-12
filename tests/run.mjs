@@ -546,8 +546,8 @@ for (let i = 0; i < 5 * 60; i += 1) {
   farB._updateBoss(farBody, 1 / 60);
   farPeak = Math.max(farPeak, farB.eBullets.filter((b) => b.alive).length);
 }
-assert('boss far range still presses', farPeak >= 6);
-assert('boss far stays readable', farPeak <= 48);
+assert('boss far range still presses', farPeak >= 10);
+assert('boss far stays readable', farPeak <= 72);
 
 const midB = new World(16);
 midB.setView(1280, 720);
@@ -562,6 +562,24 @@ for (let i = 0; i < 4 * 60; i += 1) {
   midPeak = Math.max(midPeak, midB.eBullets.filter((b) => b.alive).length);
 }
 assert('boss mid range not a cave wall', midPeak <= 56 && midPeak >= 4);
+
+const kiteB = new World(18);
+kiteB.setView(1280, 720);
+kiteB.god = true;
+kiteB.bossGrace = 0;
+const kiteBody = kiteB.spawnEnemy('boss', 0, -260);
+kiteBody.stateT = 0.2;
+kiteBody.hp = kiteBody.maxHp * 0.85;
+let kiteMin = 999;
+let kiteMax = 0;
+for (let i = 0; i < 3 * 60; i += 1) {
+  kiteB._updateBoss(kiteBody, 1 / 60);
+  const n = kiteB.eBullets.filter((b) => b.alive).length;
+  if (i > 45) kiteMin = Math.min(kiteMin, n);
+  kiteMax = Math.max(kiteMax, n);
+}
+assert('boss kite range keeps leftover pressure', kiteMin >= 3);
+assert('boss kite range stays readable', kiteMax <= 64);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
